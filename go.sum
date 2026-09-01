@@ -1,0 +1,8 @@
+github.com/mikefsq/goalpaca v0.3.2-0.20260830025450-2da7704371b4 h1:IDFsNVQuHR1CL7nDRlGv1Vb6y6BBommbEKvq7FG2mqI=
+github.com/mikefsq/goalpaca v0.3.2-0.20260830025450-2da7704371b4/go.mod h1:K6Ib2gbC+aUgAwU2G95KHsD0EIPdiCqyZIm6RGwBQhw=
+github.com/mikefsq/goindi v0.0.0-20260831234709-edcfe5ef0828 h1:HiL01ehm08w04B+3M8GNROMNtSDituNE24NRZ7JM2ps=
+github.com/mikefsq/goindi v0.0.0-20260831234709-edcfe5ef0828/go.mod h1:VfpBywDi5mzxwT3hyE6zbAiYxB0bDowDUjMkWXhaq8E=
+github.com/mikefsq/goindi v0.0.0-20260901000507-38e944df023c h1:BV9Y+UEBe8LCE5Nmxb3qaA9qBREt1ySMXfg+Ka0kVPM=
+github.com/mikefsq/goindi v0.0.0-20260901000507-38e944df023c/go.mod h1:VfpBywDi5mzxwT3hyE6zbAiYxB0bDowDUjMkWXhaq8E=
+golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
+golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
