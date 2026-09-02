@@ -7,4 +7,4 @@ require (
 	golang.org/x/sys v0.47.0
 )
 
-require github.com/mikefsq/goindi v0.0.0-20260901000507-38e944df023c
+require github.com/mikefsq/goindi v0.0.0-20260901054709-c89faf68d314

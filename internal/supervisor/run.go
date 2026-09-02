@@ -167,6 +167,24 @@ func (s *Supervisor) apply(el *indiwire.Element, conn *transport.Conn) {
 		s.deliverBlobs(el, conn)
 	}
 
+	// Answer a driver's ping BEFORE anything else, including the BLOB delivery above.
+	//
+	// The ping is libindi's release handshake for a shared-buffer BLOB, not a keepalive: the driver
+	// blocks in waitPingReply until the echo arrives, so a late reply is a stalled driver and no
+	// reply at all costs it a 5 s timeout per BLOB (see Writer.PingReply). Replying here — on the
+	// read loop, ahead of the mmap and the consumers — keeps the driver moving while this side does
+	// its own work with the buffer, which is exactly what indiserver does and why the same driver
+	// is nearly 4x faster under it.
+	//
+	// The fd has already been claimed by deliverBlobs above, so the buffer really is ours to
+	// acknowledge by the time this runs.
+	if el.Kind == indiwire.KindPing {
+		if err := s.rawWrite(func(w *indiwire.Writer) error { return w.PingReply(el.Name) }); err != nil {
+			s.logf("%s: pingReply %s failed: %v", s.cfg.Name, el.Name, err)
+		}
+		return
+	}
+
 	if el.Message != "" && (el.Kind == indiwire.KindMessage || el.State == indiwire.Alert) {
 		s.logf("%s[%s]: %s", s.cfg.Name, el.Device, el.Message)
 	}

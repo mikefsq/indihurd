@@ -25,6 +25,10 @@ type File struct {
 }
 
 // AlpacaEnabled reports whether the Alpaca face runs; absent means yes.
+//
+// It also decides DISCOVERY. Serving Alpaca and not announcing it is not a configuration anyone
+// wants — a device nobody can find is the same as a device not served, from the far side — so there
+// is no separate switch. The face is on, or it is off, and discovery follows it.
 func (f *File) AlpacaEnabled() bool { return f.Alpaca == nil || *f.Alpaca }
 
 // Entry declares one driver child = one Alpaca server on one port.
