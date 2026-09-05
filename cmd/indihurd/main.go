@@ -1,4 +1,4 @@
-// Command indihurd presents INDI driver binaries as native ASCOM Alpaca devices.
+// Command indihurd serves INDI drivers to INDI and ASCOM Alpaca clients.
 package main
 
 import (
@@ -44,9 +44,9 @@ func main() {
 func runDump(args []string) {
 	fs := flag.NewFlagSet("dump", flag.ExitOnError)
 	exe := fs.String("exec", "", "driver executable (path, or bare name via $PATH)")
-	pre := fs.Bool("pre", false, "pre-connect def burst only; never send CONNECT")
-	stateDir := fs.String("statedir", "", "child $HOME override (default: inherit, ~/.indi)")
-	timeout := fs.Duration("timeout", 10*time.Second, "total budget")
+	pre := fs.Bool("pre", false, "list properties without requesting a hardware connection")
+	stateDir := fs.String("statedir", "", "child HOME override (driver state uses HOME/.indi)")
+	timeout := fs.Duration("timeout", 10*time.Second, "maximum duration")
 	fs.Parse(args)
 	if *exe == "" {
 		fmt.Fprintln(os.Stderr, "usage: indihurd dump -exec <path> [-pre] [-statedir <dir>] [-timeout <d>]")

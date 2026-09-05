@@ -27,11 +27,8 @@ func startMount(t *testing.T, port int) (string, *host.Built) {
 		Name:   "SkeletonMount",
 		Port:   port,
 		Device: json.RawMessage(`0`),
-		// StateDir: drivers persist park/site/alignment under $HOME/.indi, so
-		// without a temp dir one run's mutations contaminate the next.
-		// PollingPeriodMs: the sim publishes EQUATORIAL_EOD_COORD once per
-		// poll, and at the 1 s default a 150 ms MoveAxis window can end before
-		// a single publish lands.
+
+		// Isolate persisted settings and poll fast enough to observe short MoveAxis commands.
 		Indi: host.IndiBlock{DeviceName: "Telescope Simulator", StateDir: t.TempDir(),
 			PollingPeriodMs: 100},
 	}
@@ -60,10 +57,7 @@ func startMount(t *testing.T, port int) (string, *host.Built) {
 	for time.Now().Before(deadline) {
 		if b.Sup.Serving() {
 			if _, ok := b.Sup.Snapshot().Vector("Telescope Simulator", "EQUATORIAL_EOD_COORD"); ok {
-				// The mount needs an observer location before any sync: with a
-				// fresh StateDir it has none, the alignment reference is
-				// invalid, and syncs are then stored but never visible. Write
-				// the complete vector.
+				// Set the observer location before recording alignment sync points.
 				if err := b.Sup.SetNumber(context.Background(), "Telescope Simulator",
 					"GEOGRAPHIC_COORD", map[string]float64{"LAT": 40, "LONG": 255, "ELEV": 1600}); err != nil {
 					t.Fatalf("preset location: %v", err)
@@ -77,8 +71,6 @@ func startMount(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestTelescopeConformance runs the ConformU telescope checks against our
-// mount backed by the real INDI simulator.
 func TestTelescopeConformance(t *testing.T) {
 	old := conformance.SettleTimeout
 	conformance.SettleTimeout = 120 * time.Second

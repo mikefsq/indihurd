@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// Inflight is the bridge-owned in-flight bit for drivers that complete an
-// operation without ever publishing Busy: set at send, cleared by the
-// driver's echo.
+// Inflight tracks a sent operation until the driver acknowledges it.
+// It covers drivers that do not publish Busy.
 type Inflight struct {
 	mu     sync.Mutex
 	at     time.Time
@@ -29,11 +28,8 @@ func (i *Inflight) Clear() {
 	i.mu.Unlock()
 }
 
-// Active reports whether the operation is still unacknowledged, given the
-// backing vector's last update time.
-//
-// A dead child never echoes, so callers must gate on availability and Clear
-// the bit themselves when the child is down.
+// Active reports whether the operation is unacknowledged.
+// Callers must check availability and clear the operation if the child stops.
 func (i *Inflight) Active(vectorUpdated time.Time) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()

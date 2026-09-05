@@ -11,8 +11,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/indiwire"
 )
 
-// TestBlobForwarding checks that one in-stream BLOB reaches both the
-// per-member OnBlob sink and the SetOnBlob element observer intact.
 func TestBlobForwarding(t *testing.T) {
 	var mu sync.Mutex
 	var memberGot string // cfg.OnBlob payload

@@ -56,8 +56,6 @@ func header(bitpix, w, h int, extra ...string) []string {
 	}, extra...)
 }
 
-// TestUnsigned16BZero: BITPIX=16 with BZERO=32768 carries unsigned data as
-// signed, so a pass-through halves the sky and wraps the stars.
 func TestUnsigned16BZero(t *testing.T) {
 	// Stored as signed big-endian: -32768→0, 0→32768, 1000→33768, 32767→65535.
 	data := be16(0x8000, 0x0000, uint16(1000), 0x7FFF)
@@ -80,7 +78,6 @@ func TestUnsigned16BZero(t *testing.T) {
 	}
 }
 
-// TestSigned16 has no BZERO: byte swap only, transmitted as Int16.
 func TestSigned16(t *testing.T) {
 	data := be16(0xFFFF /* -1 */, 0x0102)
 	frame, _, err := Transcode(fits(header(16, 2, 1), data))
@@ -106,7 +103,6 @@ func TestByteFrame(t *testing.T) {
 	}
 }
 
-// TestBottomUpFlip: BOTTOM-UP data is flipped to top-down, byte swap included.
 func TestBottomUpFlip(t *testing.T) {
 	data := be16(10, 11, 20, 21) // file row 0 = bottom row (10, 11)
 	frame, _, err := Transcode(fits(header(16, 2, 2, card("BZERO", 32768), card("ROWORDER", "BOTTOM-UP")), data))
@@ -121,8 +117,6 @@ func TestBottomUpFlip(t *testing.T) {
 	}
 }
 
-// TestRowOrderAbsent: with no ROWORDER card nothing is flipped, and the header
-// reports the absence.
 func TestRowOrderAbsent(t *testing.T) {
 	data := be16(10, 11, 20, 21)
 	frame, h, err := Transcode(fits(header(16, 2, 2, card("BZERO", 32768)), data))
@@ -137,8 +131,6 @@ func TestRowOrderAbsent(t *testing.T) {
 	}
 }
 
-// TestSecondHeaderBlock: cards spilling into a second 2880-byte block move the
-// data offset with them.
 func TestSecondHeaderBlock(t *testing.T) {
 	cards := header(16, 1, 1, card("BZERO", 32768), card("BAYERPAT", "RGGB"))
 	for i := 0; i < 35; i++ {

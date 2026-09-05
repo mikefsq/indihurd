@@ -31,7 +31,6 @@ func New(cfg Config, kit *binding.Kit) *Weather {
 	return d
 }
 
-// Description and DriverInfo read DRIVER_INFO lazily: it arrives with the
-// connected def burst, after New has run.
+// Description reads DRIVER_INFO from the current snapshot.
 func (d *Weather) Description() string { return d.kit.DescriptionText() }
 func (d *Weather) DriverInfo() string  { return d.kit.DriverInfoText(d.Version) }

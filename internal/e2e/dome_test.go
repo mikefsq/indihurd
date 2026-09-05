@@ -91,8 +91,6 @@ func domeWait(t *testing.T, c *client.Dome, what string, cond func() (bool, erro
 	t.Fatalf("timeout waiting for %s", what)
 }
 
-// TestDomeCore exercises the INDI Dome Simulator's real capability set: move,
-// abort, park and shutter, but no home, sync or altitude.
 func TestDomeCore(t *testing.T) {
 	url, _ := startDome(t, 47646)
 	c := client.NewDome(url, 0)

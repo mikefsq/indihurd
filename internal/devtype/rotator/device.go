@@ -32,8 +32,7 @@ type Rotator struct {
 	target    float64
 	targetSet bool
 
-	// Some drivers execute a move synchronously and never publish Busy, so
-	// IsMoving reads this bit from an initiator's return until the driver's echo.
+	// Track motion until acknowledged, including drivers that never publish Busy.
 	move binding.Inflight
 }
 
@@ -66,7 +65,7 @@ func (d *Rotator) Busy() bool { return d.IsMoving() }
 // IsMoving reports whether a move is in progress.
 func (d *Rotator) IsMoving() bool {
 	if ok, _ := d.kit.Avail(); !ok {
-		// A stuck in-flight bit would 0x40B every mutating PUT, so it fails rather than holds.
+		// Clear unacknowledged motion when the device becomes unavailable.
 		d.move.Clear()
 		return false
 	}
@@ -103,8 +102,7 @@ func (d *Rotator) TargetPosition() float64 {
 	return d.angle()
 }
 
-// StepSize is 0: no driver publishes degrees-per-step, and the interface has no
-// error channel to report it absent.
+// StepSize returns zero because INDI provides no angular step size.
 func (d *Rotator) StepSize() float64 { return 0 }
 
 // CanReverse reports whether ROTATOR_REVERSE is writable.
@@ -178,7 +176,7 @@ func (d *Rotator) moveRelative(delta float64) error {
 		d.target, d.targetSet = wrap360(d.angle()+delta), true
 		d.mu.Unlock()
 		d.move.Start()
-		// REL_ROTATOR_ANGLE's member name is not standardised; the first number member is it.
+		// Relative-angle member names vary by driver.
 		if err := d.kit.SendNumber(context.Background(), relProp, map[string]float64{v.Members[0].Name: delta}); err != nil {
 			d.move.Clear()
 			return err

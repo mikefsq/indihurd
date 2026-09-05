@@ -12,12 +12,11 @@ var table = binding.Table{
 	"Absolute":     {Kind: binding.Derived, Why: "presence of ABS_FOCUS_POSITION"},
 	"Temperature":  {Kind: binding.Mapped, Prop: "FOCUS_TEMPERATURE", Elem: "TEMPERATURE"},
 	"TempComp": {Kind: binding.Derived,
-		Why: "no standard INDI property; available only when a driver defines one (none scanned does) — goalpaca gates SetTempComp on TempCompAvailable"},
+		Why: "no standard temperature-compensation mapping; TempCompAvailable is false"},
 	"TempCompAvailable": {Kind: binding.Derived, Why: "presence of a temperature-compensation property; none is standard"},
 	"StepSize": {Kind: binding.Absent,
-		Why: "µm per step has no standard INDI property, and guessing mis-scales a client's autofocus step"},
+		Why: "no standard INDI property for micrometres per step"},
 }
 
-// The extra props are addressed by Func members without appearing in a row; listing
-// them keeps them out of the Actions passthrough and out of Validate's unmapped set.
+// Include properties used indirectly by Func bindings in the consumed set.
 var consumed = table.Consumed(relProp, maxProp, "FOCUS_MOTION")

@@ -63,8 +63,6 @@ func startSafety(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestSafetyMonitorCore drives the verdict both ways through the simulator's
-// control vector: IsSafe must follow the wind and fail unsafe, not stick safe.
 func TestSafetyMonitorCore(t *testing.T) {
 	url, b := startSafety(t, 47653)
 	c := client.NewSafetyMonitor(url, 0)

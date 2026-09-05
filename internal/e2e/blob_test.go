@@ -16,9 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/host"
 )
 
-// TestIndiServeBlobForwarding checks that a frame arriving as an attached fd
-// reaches an enableBLOB Also client intact while a client that never asked
-// (INDI's Never default) receives no payload at all.
 func TestIndiServeBlobForwarding(t *testing.T) {
 	build := indiBuild(t)
 	const dev = "CCD Simulator"

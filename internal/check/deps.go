@@ -1,14 +1,13 @@
 // Package check enforces the import boundaries and the per-type package template.
 package check
 
-// Only imports under these two roots are policed.
+// Import checks cover these module roots.
 const (
 	module   = "github.com/mikefsq/indihurd"
 	goalpaca = "github.com/mikefsq/goalpaca"
 )
 
-// Keys are module-relative package dirs, "internal/devtype/*" matching every
-// type package; values are importable path prefixes.
+// allowed maps package directories to permitted import prefixes.
 var allowed = map[string][]string{
 	"cmd/indihurd": {module + "/internal/host"},
 

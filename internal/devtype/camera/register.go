@@ -5,8 +5,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/binding"
 )
 
-// Config is the type-specific construction input; the host decodes the config
-// entry and assembles the Kit.
+// Config supplies device identity and version information.
 type Config struct {
 	Name    string // Alpaca device name
 	Exec    string // driver executable, for identity derivation
@@ -32,7 +31,6 @@ func New(cfg Config, kit *binding.Kit) *Camera {
 	return c
 }
 
-// Description reads DRIVER_INFO lazily: it arrives with the connected def
-// burst, after New has run.
+// Description reads DRIVER_INFO from the current snapshot.
 func (c *Camera) Description() string { return c.kit.DescriptionText() }
 func (c *Camera) DriverInfo() string  { return c.kit.DriverInfoText(c.Version) }

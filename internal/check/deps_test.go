@@ -26,8 +26,6 @@ func ruleFor(dir string) (string, bool) {
 	return "", false
 }
 
-// TestImportBoundaries fails on any module or goalpaca import outside the
-// importing package's allowlist entry.
 func TestImportBoundaries(t *testing.T) {
 	root := repoRoot(t)
 	fset := token.NewFileSet()

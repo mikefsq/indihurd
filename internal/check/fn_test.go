@@ -10,8 +10,6 @@ import (
 	"testing"
 )
 
-// TestFuncBindingsResolve checks that every Func binding's Fn names a function
-// or method that exists in its type package.
 func TestFuncBindingsResolve(t *testing.T) {
 	root := repoRoot(t)
 	dirs, err := filepath.Glob(filepath.Join(root, "internal", "devtype", "*"))

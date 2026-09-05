@@ -13,8 +13,7 @@ import (
 
 func init() { register("indi-camera", buildCamera) }
 
-// buildCamera's hooks fire only after the acquire loop starts, so closing over
-// sup and dev before they are assigned is safe.
+// buildCamera wires image callbacks before the acquire loop starts.
 func buildCamera(e Entry, srv *server.Server, logf func(string, ...any)) (*supervisor.Supervisor, error) {
 	var (
 		sup *supervisor.Supervisor
@@ -31,8 +30,7 @@ func buildCamera(e Entry, srv *server.Server, logf func(string, ...any)) (*super
 		}
 		return ""
 	}
-	// UPLOAD_CLIENT is INDI::CCD's default, but a driver-side saved config can
-	// flip it to UPLOAD_LOCAL, and then no BLOB ever reaches the sink.
+	// Override saved UPLOAD_LOCAL settings so images reach the host.
 	assertUploadClient := func(snap *snapshot.Snapshot) {
 		device := deviceOf(snap)
 		if v, ok := snap.Vector(device, "UPLOAD_MODE"); ok {
@@ -49,8 +47,7 @@ func buildCamera(e Entry, srv *server.Server, logf func(string, ...any)) (*super
 			if e.Indi.DeviceName != "" && device != e.Indi.DeviceName {
 				return
 			}
-			// data is a supervisor-owned mapping, gone the moment this
-			// callback returns.
+			// The mapping is valid only until this callback returns.
 			dev.IngestBlob(prop, member, format, data)
 		},
 		onServing: assertUploadClient,

@@ -7,9 +7,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/indiwire"
 )
 
-// maxProperties caps properties per device: a runaway child could otherwise
-// exhaust host memory one small property at a time. The busiest real drivers
-// define low hundreds.
+// maxProperties limits per-device snapshot memory use.
 const maxProperties = 4096
 
 // Store owns the current snapshot: exactly one goroutine calls
@@ -27,11 +25,10 @@ func NewStore() *Store {
 	return st
 }
 
-// Current returns the live snapshot; callers keep it as long as they like.
+// Current returns an immutable snapshot that callers may retain.
 func (st *Store) Current() *Snapshot { return st.cur.Load() }
 
-// Invalidate publishes an empty, invalid snapshot: the child is gone and
-// nothing it reported may be served.
+// Invalidate publishes an empty, invalid snapshot.
 func (st *Store) Invalidate() {
 	old := st.cur.Load()
 	st.cur.Store(&Snapshot{gen: old.gen + 1, valid: false, devices: map[string]map[string]*Vector{}})

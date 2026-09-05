@@ -16,7 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality checks every server.Rotator member has exactly one table entry.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.Rotator)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -110,7 +109,6 @@ func (fx *fixture) apply(t *testing.T, stream string) {
 	}
 }
 
-// TestReads checks the mapped reads against the simulator defs.
 func TestReads(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -137,7 +135,6 @@ func TestReads(t *testing.T) {
 	}
 }
 
-// TestMoveAbsolute checks the write, the retained target, and the in-flight bit.
 func TestMoveAbsolute(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.MoveAbsolute(120); err != nil {
@@ -159,8 +156,6 @@ func TestMoveAbsolute(t *testing.T) {
 	}
 }
 
-// TestMoveRelativeWraps checks that without a REL vector, Move writes current + delta
-// wrapped into [0,360) rather than clipped.
 func TestMoveRelativeWraps(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	fx.apply(t, `<setNumberVector device='R' name='ABS_ROTATOR_ANGLE' state='Ok'>
@@ -173,8 +168,6 @@ func TestMoveRelativeWraps(t *testing.T) {
 	}
 }
 
-// TestMoveRelativeUsesRelVector checks Move prefers REL_ROTATOR_ANGLE where the driver
-// defines one.
 func TestMoveRelativeUsesRelVector(t *testing.T) {
 	fx := newFixture(t, simDefs+`
 <defNumberVector device='R' name='REL_ROTATOR_ANGLE' state='Ok' perm='rw'>
@@ -191,7 +184,6 @@ func TestMoveRelativeUsesRelVector(t *testing.T) {
 	}
 }
 
-// TestMoveRangeCheckedNothingSent checks an out-of-range move fails without reaching the driver.
 func TestMoveRangeCheckedNothingSent(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	err := fx.dev.MoveAbsolute(400)
@@ -206,7 +198,6 @@ func TestMoveRangeCheckedNothingSent(t *testing.T) {
 	}
 }
 
-// TestSyncHaltReverse checks each writes its mapped property.
 func TestSyncHaltReverse(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.Sync(45); err != nil {
@@ -228,8 +219,6 @@ func TestSyncHaltReverse(t *testing.T) {
 	}
 }
 
-// TestReverseReadOnly checks a read-only ROTATOR_REVERSE gives CanReverse false and
-// SetReverse 0x400.
 func TestReverseReadOnly(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='R' name='ABS_ROTATOR_ANGLE' state='Ok' perm='rw'>
@@ -246,8 +235,6 @@ func TestReverseReadOnly(t *testing.T) {
 	}
 }
 
-// TestDeadChild checks a down child gives 0x407 with the supervisor's reason and clears
-// the in-flight bit.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.MoveAbsolute(10); err != nil {
@@ -270,7 +257,6 @@ func TestDeadChild(t *testing.T) {
 	}
 }
 
-// TestValidateDrift checks an unmapped driver property is reported.
 func TestValidateDrift(t *testing.T) {
 	fx := newFixture(t, simDefs+`
 <defNumberVector device='R' name='FANCY_VENDOR_KNOB' state='Ok' perm='rw'>

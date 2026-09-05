@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-// TestDevtypeHasActions checks that every implemented type overrides both
-// SupportedActions and Action; missing them fails silently at runtime.
 func TestDevtypeHasActions(t *testing.T) {
 	root := repoRoot(t)
 	dirs, err := filepath.Glob(filepath.Join(root, "internal", "devtype", "*"))

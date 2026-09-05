@@ -18,8 +18,7 @@ const (
 	introspect = "INDI:_PROPERTIES"
 )
 
-// bridgeManaged are the properties the bridge itself owns. Joystick and
-// connection-plumbing properties are deliberately absent: clients reach those.
+// bridgeManaged lists properties reserved for connection and driver management.
 var bridgeManaged = map[string]bool{
 	"CONNECTION": true, "CONNECTION_MODE": true, "DRIVER_INFO": true,
 	"DEBUG": true, "DEBUG_LEVEL": true, "LOGGING_LEVEL": true, "LOG_OUTPUT": true,
@@ -27,8 +26,7 @@ var bridgeManaged = map[string]bool{
 	"POLLING_PERIOD": true, "NICKNAME": true,
 }
 
-// videoReserved holds the streaming properties the ASCOM Video type owns, kept
-// out of the INDI: namespace so they never collide with a real Video device.
+// videoReserved lists streaming properties reserved for ASCOM Video.
 var videoReserved = map[string]bool{
 	"CCD_VIDEO_STREAM": true, "STREAMING_EXPOSURE": true, "FPS": true, "LIMITS": true,
 }
@@ -84,8 +82,7 @@ func (e *Engine) Do(name, params string) (result string, handled bool, err error
 		return "", false, nil
 	}
 	if ok, reason := e.kit.Avail(); !ok {
-		// The whole INDI: namespace is ours, so a down child is 0x407 here,
-		// never "no such action".
+		// Unavailable devices report NotConnected for INDI actions.
 		return "", true, binding.NotConnected(reason)
 	}
 	if name == introspect {
@@ -105,8 +102,6 @@ func (e *Engine) Do(name, params string) (result string, handled bool, err error
 	if err := e.write(v, params); err != nil {
 		return "", true, err
 	}
-	// The send is asynchronous; re-read so the answer carries the newest
-	// snapshot available.
 	if cur, ok := e.kit.Snap().Vector(e.kit.DeviceName(), prop); ok {
 		v = cur
 	}
@@ -160,7 +155,7 @@ func (e *Engine) write(v *snapshot.Vector, params string) error {
 				off = append(off, name)
 			}
 		}
-		// Named members only: the driver applies the vector's rule, not us.
+		// The driver applies switch-vector selection rules.
 		sort.Strings(on)
 		sort.Strings(off)
 		return e.kit.SendSwitch(ctx, v.Name, on, off)
@@ -175,12 +170,10 @@ func (e *Engine) write(v *snapshot.Vector, params string) error {
 		}
 		return e.kit.SendText(ctx, v.Name, vals)
 	}
-	// Light and BLOB never reach here; reachable filtered them.
 	return binding.InvalidOperation(fmt.Sprintf("INDI:%s is not writable", v.Name))
 }
 
-// propertyDoc renders one property as a JSON-able document; maps keep the
-// output stable without omitempty eating legal zeros.
+// propertyDoc returns a JSON property description, preserving zero values.
 func propertyDoc(v *snapshot.Vector) map[string]any {
 	doc := map[string]any{
 		"name":  v.Name,
@@ -226,8 +219,7 @@ func propertyDoc(v *snapshot.Vector) map[string]any {
 	return doc
 }
 
-// introspectDoc answers INDI:_PROPERTIES: every reachable property's shape, so
-// a client can discover payloads.
+// introspectDoc lists reachable properties and their payload fields.
 func (e *Engine) introspectDoc() (string, error) {
 	snap := e.kit.Snap()
 	dev := e.kit.DeviceName()
@@ -243,7 +235,6 @@ func (e *Engine) introspectDoc() (string, error) {
 func marshalDoc(doc any) (string, error) {
 	b, err := json.Marshal(doc)
 	if err != nil {
-		// Unreachable for the map shapes above; loud beats plausible.
 		return "", binding.DriverError("action encode failed", err.Error())
 	}
 	return string(b), nil

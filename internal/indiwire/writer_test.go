@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-// TestWriterRoundTrip checks the parser reads back everything the writer emits.
 func TestWriterRoundTrip(t *testing.T) {
 	var sb strings.Builder
 	w := NewWriter(&sb)
@@ -54,7 +53,6 @@ func TestWriterRoundTrip(t *testing.T) {
 	}
 }
 
-// TestEnableBLOBShape checks the emitted bytes; drivers never echo enableBLOB.
 func TestEnableBLOBShape(t *testing.T) {
 	var sb strings.Builder
 	if err := NewWriter(&sb).EnableBLOB("Cam", "Also"); err != nil {

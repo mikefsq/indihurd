@@ -11,7 +11,7 @@ var table = binding.Table{
 	"CanStopExposure":  {Kind: binding.Derived, Why: "always false — see StopExposure"},
 	"ImageReady":       {Kind: binding.Derived, Why: "CCD1 BLOB arrived and was transcoded; cleared by StartExposure/AbortExposure"},
 	"CameraState":      {Kind: binding.Derived, Why: "CCD_EXPOSURE vector state, ORed with the bridge in-flight bit for silent drivers"},
-	"PercentCompleted": {Kind: binding.Synthesised, Why: "CCD_EXPOSURE_VALUE counts DOWN and reports what remains: 100×(1−remaining/total), total retained from the initiator"},
+	"PercentCompleted": {Kind: binding.Synthesised, Why: "100 * (1 - remaining / requested duration)"},
 
 	"StartX": {Kind: binding.Func, Prop: "CCD_FRAME", Elem: "X", Fn: "StartX", Why: "÷/× bin; complete-vector write"},
 	"StartY": {Kind: binding.Func, Prop: "CCD_FRAME", Elem: "Y", Fn: "StartY"},
@@ -60,7 +60,7 @@ var table = binding.Table{
 	"ExposureMax":        {Kind: binding.Derived, Why: "CCD_EXPOSURE member max"},
 	"ExposureResolution": {Kind: binding.Derived, Why: "CCD_EXPOSURE member step"},
 
-	"HasShutter": {Kind: binding.Synthesised, Why: "false — INDI never surfaces shutter capability (CCD_HAS_SHUTTER is driver-internal; FRAME_DARK is filled unconditionally, indiccd.cpp:189); clients then prompt to cover for darks"},
+	"HasShutter": {Kind: binding.Synthesised, Why: "shutter capability is not exposed through INDI properties"},
 
 	"PulseGuide":     {Kind: binding.Func, Fn: "PulseGuide", Why: "TELESCOPE_TIMED_GUIDE_NS/_WE, milliseconds"},
 	"IsPulseGuiding": {Kind: binding.Derived, Why: "either timed-guide vector Busy OR bridge in-flight"},

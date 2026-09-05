@@ -70,8 +70,6 @@ func startCCD(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestCameraExposure exercises identity, geometry, gain, cooling and the full
-// exposure → BLOB → ImageBytes path against the real INDI CCD simulator.
 func TestCameraExposure(t *testing.T) {
 	old := conformance.SettleTimeout
 	conformance.SettleTimeout = 60 * time.Second

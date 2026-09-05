@@ -130,8 +130,6 @@ func diff(t *testing.T, a, b []string, an, bn string) {
 
 const focusSim = "drivers/focuser/indi_simulator_focus"
 
-// TestSocketpairVsTCP checks that the same driver yields structurally
-// identical snapshots over our socketpair and over a stock indiserver's port.
 func TestSocketpairVsTCP(t *testing.T) {
 	build := indiBuild(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -172,9 +170,6 @@ func TestSocketpairVsTCP(t *testing.T) {
 	}
 }
 
-// TestRecordThenReplay checks that a recorded socketpair session replays into
-// an identical snapshot, installing the capture into the corpus when
-// INDIHURD_RECORD=1.
 func TestRecordThenReplay(t *testing.T) {
 	build := indiBuild(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

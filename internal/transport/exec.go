@@ -23,9 +23,8 @@ type Child struct {
 	cmd *exec.Cmd
 }
 
-// DialExec spawns an INDI driver on an AF_UNIX socketpair, delivering its
-// stderr line-by-line to stderrLine (may be nil) and appending env over the
-// inherited environment (nil inherits).
+// DialExec starts a driver on a Unix socketpair with optional environment overrides.
+// stderrLine receives stderr lines; nil discards them.
 func DialExec(ctx context.Context, stderrLine func(string), env []string, argv ...string) (*Child, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("transport: empty argv")
@@ -35,8 +34,7 @@ func DialExec(ctx context.Context, stderrLine func(string), env []string, argv .
 		return nil, fmt.Errorf("transport: socketpair: %w", err)
 	}
 	childEnd := os.NewFile(uintptr(pair[0]), "indi-child")
-	// Keep the parent end a raw blocking fd: an os.File would go non-blocking
-	// under the runtime poller, and Recvmsg would then see EAGAIN.
+	// Use a blocking fd; the Go file poller would make Recvmsg return EAGAIN.
 	parentFd := pair[1]
 	if err := unix.SetNonblock(parentFd, false); err != nil {
 		childEnd.Close()
@@ -51,8 +49,7 @@ func DialExec(ctx context.Context, stderrLine func(string), env []string, argv .
 	// A socketpair on fd 0/1 is what switches libindi onto attached-fd BLOBs.
 	cmd.Stdin = childEnd
 	cmd.Stdout = childEnd
-	// Own process group: a host signal sweep must not reach drivers, and Kill
-	// can take the whole group.
+	// Isolate driver signals and allow termination of the whole process group.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {

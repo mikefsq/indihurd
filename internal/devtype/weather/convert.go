@@ -2,9 +2,7 @@ package weather
 
 import "strings"
 
-// windToMS converts to ASCOM's m/s only when the INDI member label discloses
-// the unit. Wind units are not agreed across drivers, so an undisclosed unit
-// passes through rather than being assumed.
+// windToMS converts labelled wind units to m/s, leaving unknown units unchanged.
 func windToMS(v float64, label string) float64 {
 	l := strings.ToLower(label)
 	switch {

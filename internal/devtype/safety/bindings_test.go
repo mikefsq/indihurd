@@ -14,7 +14,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality checks every server.SafetyMonitor member has exactly one table entry.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.SafetyMonitor)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -85,7 +84,6 @@ func (fx *fixture) apply(t *testing.T, stream string) {
 	}
 }
 
-// TestSafeFromWeatherStatus checks the verdict follows the WEATHER_STATUS lights.
 func TestSafeFromWeatherStatus(t *testing.T) {
 	fx := newFixture(t, weatherDefs)
 	if !fx.dev.IsSafe() {
@@ -104,7 +102,6 @@ func TestSafeFromWeatherStatus(t *testing.T) {
 	}
 }
 
-// TestSafetyStatusPreferred checks a dedicated SAFETY_STATUS verdict outranks the weather lights.
 func TestSafetyStatusPreferred(t *testing.T) {
 	fx := newFixture(t, weatherDefs+`
 <defLightVector device='S' name='SAFETY_STATUS' state='Ok'>
@@ -120,7 +117,6 @@ func TestSafetyStatusPreferred(t *testing.T) {
 	}
 }
 
-// TestFailUnsafe checks no verdict source, idle lights, and a dead child all read unsafe.
 func TestFailUnsafe(t *testing.T) {
 	fx := newFixture(t, `
 <defSwitchVector device='S' name='CONNECTION' state='Ok' perm='rw' rule='OneOfMany'>
@@ -149,7 +145,6 @@ func TestFailUnsafe(t *testing.T) {
 	}
 }
 
-// TestDescriptionDisclosesSynthesis checks a monitor derived from weather says so.
 func TestDescriptionDisclosesSynthesis(t *testing.T) {
 	fx := newFixture(t, weatherDefs)
 	if !strings.Contains(fx.dev.Description(), "synthesised from WEATHER_STATUS") {

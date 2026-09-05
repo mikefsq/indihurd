@@ -17,8 +17,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality checks that every server.ObservingConditions member has exactly
-// one table entry and no entry is stale.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.ObservingConditions)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -127,8 +125,6 @@ func TestReads(t *testing.T) {
 	}
 }
 
-// TestWindUnitFromLabel checks that 18 kph, disclosed only in the label, reads
-// 5 m/s rather than a silent 18.
 func TestWindUnitFromLabel(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if v, err := fx.dev.WindSpeed(); err != nil || math.Abs(v-5) > 1e-9 {
@@ -139,8 +135,6 @@ func TestWindUnitFromLabel(t *testing.T) {
 	}
 }
 
-// TestWindUndisclosedUnitPassesThrough checks that a label with no unit yields
-// the driver's number verbatim.
 func TestWindUndisclosedUnitPassesThrough(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='X' name='WEATHER_PARAMETERS' state='Ok' perm='ro'>
@@ -151,7 +145,6 @@ func TestWindUndisclosedUnitPassesThrough(t *testing.T) {
 	}
 }
 
-// TestLabelDiscovery checks that a driver-named member is found by its label.
 func TestLabelDiscovery(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='X' name='WEATHER_PARAMETERS' state='Ok' perm='ro'>
@@ -162,8 +155,6 @@ func TestLabelDiscovery(t *testing.T) {
 	}
 }
 
-// TestUnimplementedSensors checks that sensors the driver does not publish
-// answer 0x400, never zero.
 func TestUnimplementedSensors(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	for name, get := range map[string]func() (float64, error){
@@ -199,8 +190,6 @@ func TestSensorDescriptionCarriesLabel(t *testing.T) {
 	}
 }
 
-// TestTimeSinceLastUpdate checks that ages come from per-member arrival, not
-// vector update: only the members a set names get a fresh Arrived.
 func TestTimeSinceLastUpdate(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	time.Sleep(20 * time.Millisecond)
@@ -260,7 +249,6 @@ func TestRefreshAbsent(t *testing.T) {
 	}
 }
 
-// TestDeadChild checks that reads answer 0x407 with the supervisor's reason.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	fx.up = false

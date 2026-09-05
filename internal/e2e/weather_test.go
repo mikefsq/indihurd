@@ -66,8 +66,6 @@ func startWeather(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestWeatherObservingConditions exercises the core members against the real
-// INDI Weather Simulator, which publishes only five of the optional sensors.
 func TestWeatherObservingConditions(t *testing.T) {
 	url, b := startWeather(t, 47643)
 	c := client.NewObservingConditions(url, 0)

@@ -16,8 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality checks that every server.Switch member has exactly one table
-// entry and no entry is stale.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.Switch)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -160,8 +158,6 @@ func TestFlatteningOrder(t *testing.T) {
 	}
 }
 
-// TestPinAppendOnly checks that new properties append and a deleted property
-// keeps its id, answering 0x400 there.
 func TestPinAppendOnly(t *testing.T) {
 	fx := newFixture(t, mixedDefs)
 	base := fx.dev.MaxSwitch()
@@ -333,8 +329,6 @@ func TestAsyncQuartet(t *testing.T) {
 	}
 }
 
-// TestDeadChild checks that ids hold and reads answer 0x407 with the
-// supervisor's reason.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, mixedDefs)
 	max := fx.dev.MaxSwitch()

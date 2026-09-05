@@ -9,7 +9,6 @@ import (
 	"github.com/mikefsq/goalpaca/alpaca"
 )
 
-// TestIngestCompressedFITS: a ".fits.z" frame is inflated before the FITS gate.
 func TestIngestCompressedFITS(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -36,8 +35,6 @@ func TestIngestCompressedFITS(t *testing.T) {
 	}
 }
 
-// TestIngestBadCompressed: non-zlib bytes labelled ".fits.z" fail naming
-// CCD_COMPRESSION, not the transcode.
 func TestIngestBadCompressed(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev

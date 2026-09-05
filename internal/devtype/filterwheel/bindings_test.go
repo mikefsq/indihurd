@@ -16,7 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality checks every server.FilterWheel member has exactly one table entry.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.FilterWheel)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -111,7 +110,6 @@ func (fx *fixture) apply(t *testing.T, stream string) {
 	}
 }
 
-// TestReads checks the mapped reads against the simulator defs.
 func TestReads(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -133,7 +131,6 @@ func TestReads(t *testing.T) {
 	}
 }
 
-// TestNamesSynthesised checks a driver with FILTER_SLOT but no FILTER_NAME still reports names.
 func TestNamesSynthesised(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='W' name='FILTER_SLOT' state='Ok' perm='rw'>
@@ -148,7 +145,6 @@ func TestNamesSynthesised(t *testing.T) {
 	}
 }
 
-// TestSetPositionOffByOne checks ASCOM slot 3 reaches the driver as INDI slot 4.
 func TestSetPositionOffByOne(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.SetPosition(3); err != nil {
@@ -159,7 +155,6 @@ func TestSetPositionOffByOne(t *testing.T) {
 	}
 }
 
-// TestSetPositionRangeCheckedNothingSent checks an out-of-range slot fails without reaching the driver.
 func TestSetPositionRangeCheckedNothingSent(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	err := fx.dev.SetPosition(8) // INDI slot 9, beyond max 8
@@ -171,7 +166,6 @@ func TestSetPositionRangeCheckedNothingSent(t *testing.T) {
 	}
 }
 
-// TestMovingSentinel checks Position reads -1 while FILTER_SLOT is Busy, never the target slot.
 func TestMovingSentinel(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	fx.apply(t, `<setNumberVector device='W' name='FILTER_SLOT' state='Busy'>
@@ -189,7 +183,6 @@ func TestMovingSentinel(t *testing.T) {
 	}
 }
 
-// TestSilentMoverInflight checks Position reads -1 from SetPosition's return, before any driver echo.
 func TestSilentMoverInflight(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.SetPosition(2); err != nil {
@@ -205,7 +198,6 @@ func TestSilentMoverInflight(t *testing.T) {
 	}
 }
 
-// TestDeadChild checks a down child gives 0x407 with the supervisor's reason, and Position -1.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	fx.up = false
@@ -225,7 +217,6 @@ func TestDeadChild(t *testing.T) {
 	}
 }
 
-// TestValidateDrift checks an unmapped driver property is reported.
 func TestValidateDrift(t *testing.T) {
 	fx := newFixture(t, simDefs+`
 <defNumberVector device='W' name='FANCY_VENDOR_KNOB' state='Ok' perm='rw'>

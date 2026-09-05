@@ -8,30 +8,24 @@ import (
 	"strings"
 )
 
-// File is the indihurd configuration; decoding is strict, so a typo is an error.
+// File holds server settings and device entries.
 type File struct {
 	Devices []Entry `json:"devices"`
 
-	// IndiPort serves every enabled entry's devices to INDI clients on one
-	// port (7624 by convention); omitted = no INDI face.
+	// IndiPort enables the INDI TCP server. Zero disables it.
 	IndiPort int `json:"indiPort,omitempty"`
 
-	// IndiListen is the interface for IndiPort; empty binds loopback only.
+	// IndiListen is the INDI bind address. Empty defaults to loopback.
 	IndiListen string `json:"indiListen,omitempty"`
 
-	// Alpaca defaults true; false serves INDI only, and entry ports become
-	// optional.
+	// Alpaca enables Alpaca servers and discovery. Nil defaults to true.
 	Alpaca *bool `json:"alpaca,omitempty"`
 }
 
-// AlpacaEnabled reports whether the Alpaca face runs; absent means yes.
-//
-// It also decides DISCOVERY. Serving Alpaca and not announcing it is not a configuration anyone
-// wants — a device nobody can find is the same as a device not served, from the far side — so there
-// is no separate switch. The face is on, or it is off, and discovery follows it.
+// AlpacaEnabled reports whether Alpaca servers and discovery are enabled.
 func (f *File) AlpacaEnabled() bool { return f.Alpaca == nil || *f.Alpaca }
 
-// Entry declares one driver child = one Alpaca server on one port.
+// Entry configures one driver process and its Alpaca server.
 type Entry struct {
 	Driver string          `json:"driver"`
 	Exec   string          `json:"exec"`
@@ -42,26 +36,24 @@ type Entry struct {
 	Indi   IndiBlock       `json:"indi,omitempty"`
 }
 
-// IndiBlock is the INDI-specific sub-config.
+// IndiBlock holds driver connection settings.
 type IndiBlock struct {
 	DeviceName      string `json:"deviceName,omitempty"` // omitted = the only device
 	PollingPeriodMs int    `json:"pollingPeriodMs,omitempty"`
 	Record          string `json:"record,omitempty"`   // tee the session to this path
 	Serial          string `json:"serial,omitempty"`   // operator-pinned hardware serial for UniqueID
-	StateDir        string `json:"stateDir,omitempty"` // the child's $HOME; empty = inherit ~/.indi
+	StateDir        string `json:"stateDir,omitempty"` // child HOME override; driver state lives in HOME/.indi
 
-	// BeforeConnect presets, `"PROP.MEMBER": "value"`, gate CONNECT:
-	// DEVICE_PORT, CONNECTION_MODE and baud must land before it.
+	// BeforeConnect sets PROPERTY.MEMBER values before connecting to hardware.
 	BeforeConnect map[string]string `json:"beforeConnect,omitempty"`
 	// AfterConnect presets apply once the driver is serving.
 	AfterConnect map[string]string `json:"afterConnect,omitempty"`
 }
 
-// Enabled defaults true; `"enable": false` keeps an entry present but unspawned.
+// Enabled reports whether the entry should start. Nil defaults to true.
 func (e *Entry) Enabled() bool { return e.Enable == nil || *e.Enable }
 
-// Numbers resolves the pinned per-type device numbers: a bare int means "this
-// number, for whichever single type applies" (key ""), an object pins per type.
+// Numbers returns device-number pins by type. An integer uses the empty-string key.
 func (e *Entry) Numbers() (map[string]int, error) {
 	if len(e.Device) == 0 {
 		return nil, fmt.Errorf("entry %q: missing device number pin", e.Name)

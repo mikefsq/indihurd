@@ -2,8 +2,7 @@ package supervisor
 
 import "time"
 
-// backoff is capped exponential, so a crash-looping driver cannot become a
-// fork loop. Reaching Serving resets it.
+// backoff applies capped exponential retry delays.
 type backoff struct {
 	base, cap, cur time.Duration
 }

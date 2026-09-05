@@ -16,7 +16,7 @@ import (
 type DumpOptions struct {
 	Exec     string        // driver executable; path, or bare name via $PATH
 	Pre      bool          // pre-connect burst only: never send CONNECT
-	StateDir string        // child $HOME override; empty = inherit ~/.indi
+	StateDir string        // child HOME override; empty inherits HOME
 	Timeout  time.Duration // total budget; zero = 10s
 }
 
@@ -89,7 +89,7 @@ render:
 	return nil
 }
 
-// memberString matches on the type's String form: host may not import indiwire.
+// memberString formats a property value for diagnostic output.
 func memberString(vtype string, m snapshot.MemberVal) string {
 	switch vtype {
 	case "Switch":

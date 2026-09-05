@@ -1,4 +1,4 @@
-// Package host holds config, one Alpaca server per entry, and the store, supervisor and Kit assembly.
+// Package host loads configuration and assembles device servers and supervisors.
 package host
 
 import (
@@ -12,8 +12,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/supervisor"
 )
 
-// Built is one assembled entry: the goalpaca server carrying its devices, plus
-// the supervisor handle.
+// Built pairs an Alpaca server with its driver supervisor.
 type Built struct {
 	Server *server.Server
 	Sup    *supervisor.Supervisor
@@ -33,7 +32,6 @@ func Build(e Entry, cfg server.Config, logf func(string, ...any)) (*Built, error
 	srv := server.New(cfg)
 	b, ok := builders[e.Driver]
 	if !ok {
-		// Load validates driver names, but Build is callable on its own.
 		return nil, fmt.Errorf("entry %q: unknown driver %q", e.Name, e.Driver)
 	}
 	sup, err := b(e, srv, logf)
@@ -43,9 +41,7 @@ func Build(e Entry, cfg server.Config, logf func(string, ...any)) (*Built, error
 	return &Built{Server: srv, Sup: sup}, nil
 }
 
-// The connected def burst trails the Serving transition, so re-validation
-// waits for defQuiet of silence instead of a fixed sleep; defSettleMax bounds
-// a driver that redefines forever.
+// Wait for property definitions to settle, bounded by defSettleMax.
 const (
 	defQuiet     = time.Second
 	defSettleMax = 15 * time.Second

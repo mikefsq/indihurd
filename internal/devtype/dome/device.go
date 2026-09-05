@@ -26,8 +26,7 @@ const (
 	syncProp     = "DOME_SYNC"
 	autosyncProp = "DOME_AUTOSYNC"
 
-	// unparkTimeout bounds the pre-slew unpark fence; an unpark can drive the
-	// shutter, which is minutes on real hardware.
+	// unparkTimeout allows time for shutter motion during unpark.
 	unparkTimeout = 5 * time.Minute
 )
 
@@ -87,9 +86,7 @@ func (d *Dome) Azimuth() (float64, error) {
 	return binding.Number(d.kit, table, "Azimuth")
 }
 
-// unparkForMotion unparks before a slew: a parked dome refuses every motion
-// command and ASCOM Dome has no Unpark member. The unpark must complete first.
-// A move sent while the driver is still unparking leaves DOME_PARK Busy forever.
+// unparkForMotion waits for unpark to complete before sending a motion command.
 func (d *Dome) unparkForMotion() error {
 	if !d.kit.Has(parkProp) || !d.switchOn(parkProp, "PARK") {
 		return nil

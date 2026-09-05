@@ -12,8 +12,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// Child is what a served device must offer: the current property view, and a
-// way to pass a client's write down to the driver.
+// Child provides a supervised device snapshot and property writes.
 type Child interface {
 	Snapshot() *snapshot.Snapshot
 	SetNumber(ctx context.Context, device, prop string, values map[string]float64) error
@@ -170,8 +169,7 @@ func (s *Server) devices() []string {
 	return out
 }
 
-// childFor finds the child publishing a device; a name published by two
-// children resolves to the first, which is silent misdirection for the loser.
+// childFor returns the first child publishing device.
 func (s *Server) childFor(device string) Child {
 	var found Child
 	for _, ch := range s.children {
@@ -192,8 +190,7 @@ func (s *Server) childFor(device string) Child {
 	return found
 }
 
-// warnDup logs once per name: the scans that detect a collision run per client
-// request and would otherwise spam.
+// warnDup logs each duplicate device name once.
 func (s *Server) warnDup(device string) {
 	s.mu.Lock()
 	first := !s.dupWarned[device]
@@ -204,8 +201,7 @@ func (s *Server) warnDup(device string) {
 	}
 }
 
-// replay answers getProperties from the snapshot: the driver sent its
-// definitions once, to us, so a late-joining client can be served only here.
+// replay sends cached definitions to a client requesting properties.
 func (s *Server) replay(c *conn, device, name string) {
 	for _, ch := range s.children {
 		snap := ch.Snapshot()

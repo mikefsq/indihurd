@@ -20,11 +20,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestHelperDriver is a fake INDI driver, run as a helper process in the mode
-// named by SUPERVISOR_HELPER, so the supervisor tests need no INDI install.
-// Modes: ok, refuse (CONNECT answers Alert), exit (dies immediately), stubborn
-// (ignores SIGTERM), blob (serves a BLOB), port (poisons itself permanently if
-// CONNECT arrives before DEVICE_PORT).
 func TestHelperDriver(t *testing.T) {
 	mode := os.Getenv("SUPERVISOR_HELPER")
 	if mode == "" {
@@ -245,8 +240,6 @@ func TestWaitSettle(t *testing.T) {
 	}
 }
 
-// TestKillSoak SIGKILLs the child repeatedly, checking that no stale snapshot
-// is ever served, that it recovers to Serving, and that fds do not grow.
 func TestKillSoak(t *testing.T) {
 	s, st, _, _ := start(t, "ok", Config{})
 	waitPhase(t, s, PhaseServing, 5*time.Second)
@@ -293,8 +286,6 @@ func countFds(t *testing.T) int {
 	return len(ents)
 }
 
-// TestConnectRefusedRetriesWithoutRespawn checks that a live child whose
-// hardware is absent stays Acquiring and is nudged, never respawned.
 func TestConnectRefusedRetriesWithoutRespawn(t *testing.T) {
 	s, _, _, _ := start(t, "refuse", Config{})
 	deadline := time.Now().Add(1 * time.Second)
@@ -320,8 +311,6 @@ func TestConnectRefusedRetriesWithoutRespawn(t *testing.T) {
 	}
 }
 
-// TestCrashLoopBackoff checks that an instantly-exiting driver is paced by the
-// backoff cap instead of respawning flat out.
 func TestCrashLoopBackoff(t *testing.T) {
 	s, _, _, _ := start(t, "exit", Config{BackoffBase: 30 * time.Millisecond, BackoffCap: 120 * time.Millisecond})
 	time.Sleep(700 * time.Millisecond)
@@ -335,8 +324,6 @@ func TestCrashLoopBackoff(t *testing.T) {
 	}
 }
 
-// TestOrderedShutdownStubborn checks that a driver ignoring SIGTERM is
-// SIGKILLed after the grace and that Run returns promptly.
 func TestOrderedShutdownStubborn(t *testing.T) {
 	s, _, cancel, _ := start(t, "stubborn", Config{KillGrace: 200 * time.Millisecond})
 	waitPhase(t, s, PhaseServing, 5*time.Second)
@@ -361,8 +348,6 @@ func TestOrderedShutdownStubborn(t *testing.T) {
 	}
 }
 
-// TestSendsRefuseWhileDown checks that a send while the child is down returns
-// ErrNotServing carrying a reason.
 func TestSendsRefuseWhileDown(t *testing.T) {
 	s, _, _, _ := start(t, "exit", Config{})
 	time.Sleep(100 * time.Millisecond)
@@ -376,8 +361,6 @@ func TestSendsRefuseWhileDown(t *testing.T) {
 	}
 }
 
-// TestPresets checks that before-connect presets land before CONNECT and
-// after-connect presets land once Serving.
 func TestPresets(t *testing.T) {
 	s, st, _, lb := start(t, "port", Config{
 		PresetsBeforeConnect: map[string]string{"DEVICE_PORT.PORT": "/dev/fake0"},

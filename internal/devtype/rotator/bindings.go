@@ -6,7 +6,7 @@ var table = binding.Table{
 	"Position": {Kind: binding.Mapped, Prop: "ABS_ROTATOR_ANGLE", Elem: "ANGLE",
 		Why: "the sky angle — mechanical + sync offset, applied inside the driver"},
 	"MechanicalPosition": {Kind: binding.Derived,
-		Why: "INDI applies sync inside the driver and reports only the synced angle, so mechanical and sky coincide — reported as such, never an invented offset"},
+		Why: "INDI reports only the synced angle; mechanical position uses the same value"},
 	"MoveAbsolute": {Kind: binding.Func, Prop: "ABS_ROTATOR_ANGLE", Elem: "ANGLE", Fn: "moveAbsolute"},
 	"Move": {Kind: binding.Func, Fn: "moveRelative",
 		Why: "REL_ROTATOR_ANGLE where present, else ABS_ROTATOR_ANGLE = current + delta wrapped to [0,360)"},
@@ -20,9 +20,8 @@ var table = binding.Table{
 	"TargetPosition": {Kind: binding.Synthesised,
 		Why: "last commanded angle — INDI reports only the current one; current position before any command"},
 	"StepSize": {Kind: binding.Absent,
-		Why: "no driver publishes degrees-per-step reliably; server.Rotator.StepSize has no error channel, so 0 is served in place of the 0x400"},
+		Why: "no angular step-size mapping; returns zero"},
 }
 
-// relProp is addressed by Move without appearing in a row; listing it keeps it out
-// of the Actions passthrough and out of Validate's unmapped set.
+// Move uses relProp indirectly; exclude it from passthrough actions.
 var consumed = table.Consumed(relProp)

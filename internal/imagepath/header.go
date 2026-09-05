@@ -11,7 +11,7 @@ const (
 	cardSize  = 80
 )
 
-// Header carries exactly the keywords the fused pass needs.
+// Header holds the FITS fields used by Transcode.
 type Header struct {
 	Bitpix     int
 	Naxis      int
@@ -72,7 +72,7 @@ func ParseHeader(fits []byte) (Header, error) {
 }
 
 func atoi(s string) int {
-	// FITS integers may be written as floats ("16.") by sloppy writers.
+	// Accept integer-valued FITS cards written as floats.
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0

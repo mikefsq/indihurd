@@ -16,7 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality checks every server.Focuser member has exactly one table entry.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.Focuser)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -113,8 +112,6 @@ func (fx *fixture) apply(t *testing.T, stream string) {
 	}
 }
 
-// TestDriverIdentity checks Description/DriverInfo carry DRIVER_INFO once it arrives and
-// fall back to the static form while the child is down.
 func TestDriverIdentity(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if got, want := fx.dev.Description(), "INDI F via indihurd"; got != want {
@@ -147,7 +144,6 @@ func TestDriverIdentity(t *testing.T) {
 	}
 }
 
-// TestReads checks the mapped reads against the simulator defs.
 func TestReads(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -177,7 +173,6 @@ func TestReads(t *testing.T) {
 	}
 }
 
-// TestMoveRangeCheckedNothingSent checks an out-of-range move fails without reaching the driver.
 func TestMoveRangeCheckedNothingSent(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	err := fx.dev.Move(70000) // beyond the driver's max 60000
@@ -195,7 +190,6 @@ func TestMoveRangeCheckedNothingSent(t *testing.T) {
 	}
 }
 
-// TestHaltAndBusy checks Halt writes the abort switch and a Busy vector reads as moving.
 func TestHaltAndBusy(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.Halt(); err != nil {
@@ -211,8 +205,6 @@ func TestHaltAndBusy(t *testing.T) {
 	}
 }
 
-// TestSilentMoverInflight checks IsMoving reads true from Move's return until the echo,
-// for a driver that never publishes Busy.
 func TestSilentMoverInflight(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.Move(30000); err != nil {
@@ -231,7 +223,6 @@ func TestSilentMoverInflight(t *testing.T) {
 	}
 }
 
-// TestRelativeOnlyFocuser checks Position/Move report 0x400, never zero.
 func TestRelativeOnlyFocuser(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='F' name='REL_FOCUS_POSITION' state='Ok' perm='rw'>
@@ -248,7 +239,6 @@ func TestRelativeOnlyFocuser(t *testing.T) {
 	}
 }
 
-// TestDeadChild checks a down child gives 0x407 with the supervisor's reason in the message.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	fx.up = false
@@ -271,7 +261,6 @@ func TestDeadChild(t *testing.T) {
 	}
 }
 
-// TestDeviceStateOneSnapshot checks the batch carries the mapped values.
 func TestDeviceStateOneSnapshot(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	sv := fx.dev.DeviceState()
@@ -284,7 +273,6 @@ func TestDeviceStateOneSnapshot(t *testing.T) {
 	}
 }
 
-// TestValidateDrift checks an unmapped driver property is reported.
 func TestValidateDrift(t *testing.T) {
 	fx := newFixture(t, simDefs+`
 <defNumberVector device='F' name='FANCY_VENDOR_KNOB' state='Ok' perm='rw'>
@@ -297,8 +285,6 @@ func TestValidateDrift(t *testing.T) {
 	}
 }
 
-// TestActionsWiring checks typed-consumed properties never surface as Actions and the
-// driver's extras do.
 func TestActionsWiring(t *testing.T) {
 	fx := newFixture(t, simDefs+`
 <defNumberVector device='F' name='FOCUS_SPEED' state='Ok' perm='rw'>
@@ -327,7 +313,6 @@ func TestActionsWiring(t *testing.T) {
 	}
 }
 
-// TestUniqueIDStable checks the same inputs give the same UUID and different ones do not.
 func TestUniqueIDStable(t *testing.T) {
 	a := binding.UniqueID("indi_x", "F", "serial123")
 	b := binding.UniqueID("indi_x", "F", "serial123")

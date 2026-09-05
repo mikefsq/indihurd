@@ -20,8 +20,7 @@ const (
 	intensityElem = "FLAT_LIGHT_INTENSITY_VALUE"
 )
 
-// CoverCal implements server.CoverCalibrator over an INDI child through a
-// binding.Kit; either half may be absent.
+// CoverCal implements server.CoverCalibrator; either hardware component may be absent.
 type CoverCal struct {
 	server.BaseCoverCalibrator
 	kit  *binding.Kit
@@ -149,8 +148,7 @@ func (d *CoverCal) CalibratorState() server.CalibratorStatus {
 	return alpaca.CalibratorUnknown
 }
 
-// Brightness reads 0 unless the calibrator is Ready: the driver retains its
-// last intensity across off/on, ASCOM does not.
+// Brightness returns zero unless the calibrator is Ready.
 func (d *CoverCal) Brightness() int {
 	if d.CalibratorState() != alpaca.CalibratorReady {
 		return 0
@@ -178,8 +176,7 @@ func (d *CoverCal) MaxBrightness() int {
 	return 0
 }
 
-// CalibratorOn writes the range-checked intensity first, then FLAT_LIGHT_ON, so
-// the light comes on at the requested brightness rather than the retained one.
+// CalibratorOn sets the intensity before turning on the light.
 func (d *CoverCal) CalibratorOn(brightness int) error {
 	if ok, reason := d.kit.Avail(); !ok {
 		return binding.NotConnected(reason)

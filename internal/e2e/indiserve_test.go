@@ -14,8 +14,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/host"
 )
 
-// TestIndiServeFace exercises the INDI server face with a real INDI client:
-// one live child answering an Alpaca and an INDI client at once.
 func TestIndiServeFace(t *testing.T) {
 	build := indiBuild(t)
 	const dev = "Focuser Simulator"
@@ -93,8 +91,6 @@ func TestIndiServeFace(t *testing.T) {
 	t.Logf("INDI client moved the focuser to %v through indihurd", target)
 }
 
-// TestIndiOnly checks that with Alpaca off, where nothing calls Device.Open,
-// the host still starts the acquire loop and the driver spawns.
 func TestIndiOnly(t *testing.T) {
 	build := indiBuild(t)
 	const dev = "Focuser Simulator"

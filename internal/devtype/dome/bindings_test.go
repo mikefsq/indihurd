@@ -16,8 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality is the drift gate: every server.Dome member has exactly one
-// table entry, and no entry is stale.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.Dome)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -152,8 +150,6 @@ func TestCapabilities(t *testing.T) {
 	}
 }
 
-// TestRollOffRoof: neither an azimuth nor a shutter is fabricated for a roof
-// that has neither.
 func TestRollOffRoof(t *testing.T) {
 	fx := newFixture(t, `
 <defSwitchVector device='D' name='DOME_PARK' state='Ok' perm='rw' rule='OneOfMany'>
@@ -213,8 +209,6 @@ func TestSlewRangeCheckedNothingSent(t *testing.T) {
 	}
 }
 
-// TestShutterStateMachine: five ASCOM values from the two-member switch plus
-// the vector state.
 func TestShutterStateMachine(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if s, err := fx.dev.ShutterStatus(); err != nil || s != alpaca.ShutterClosed {
@@ -254,8 +248,6 @@ func TestShutterStateMachine(t *testing.T) {
 	}
 }
 
-// TestSlewUnparks: a slew sends UNPARK first, or a parked dome ignores it and
-// AtPark never clears.
 func TestSlewUnparks(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	fx.apply(t, `<setSwitchVector device='D' name='DOME_PARK' state='Ok'>
@@ -346,8 +338,6 @@ func TestSlaved(t *testing.T) {
 	}
 }
 
-// TestSetSlavedFalseWithoutAutosync: ConformU disables slaving even when
-// CanSlave is false, which is a no-op success rather than an error.
 func TestSetSlavedFalseWithoutAutosync(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='D' name='ABS_DOME_POSITION' state='Ok' perm='rw'>
@@ -377,8 +367,6 @@ func TestAbortClearsInflight(t *testing.T) {
 	}
 }
 
-// TestDeadChild: 0x407 with the supervisor's reason; in-flight state fails
-// rather than holds.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.Park(); err != nil {

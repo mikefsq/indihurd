@@ -11,9 +11,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/indiwire"
 )
 
-// TestDelPropertyOnChildDeath checks that a child's death sends element
-// observers one device-wide delProperty per device, and that the respawn's
-// defs then arrive.
 func TestDelPropertyOnChildDeath(t *testing.T) {
 	var mu sync.Mutex
 	var dels []string

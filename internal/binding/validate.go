@@ -38,10 +38,8 @@ func (t Table) Consumed(extra ...string) Consumed {
 	return func(prop string) bool { return set[prop] }
 }
 
-// Validate reports one device's mapping drift: table rows addressing
-// properties the driver never defined, and driver properties nothing consumes.
-// The connected def burst trails the serving transition, so run it again
-// after late defs.
+// Validate reports missing mapped properties and unconsumed driver properties.
+// Call again after connected-device definitions have settled.
 func Validate(tbl Table, consumed Consumed, snap *snapshot.Snapshot, device string) []string {
 	if !snap.Valid() {
 		return nil

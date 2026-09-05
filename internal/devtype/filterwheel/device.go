@@ -57,7 +57,7 @@ func (d *FilterWheel) Busy() bool { return d.moving() }
 
 func (d *FilterWheel) moving() bool {
 	if ok, _ := d.kit.Avail(); !ok {
-		// A stuck in-flight bit would 0x40B every mutating PUT, so it fails rather than holds.
+		// Clear unacknowledged motion when the device becomes unavailable.
 		d.move.Clear()
 		return false
 	}

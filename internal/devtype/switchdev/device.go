@@ -35,7 +35,7 @@ type Switch struct {
 	index  map[pair]bool
 }
 
-// Open starts the acquire loop and returns immediately, always.
+// Open starts the acquire loop and returns immediately.
 func (s *Switch) Open(ctx context.Context) error {
 	s.stop = server.RunLoop(ctx, s.ID, s.kit.Run)
 	return nil
@@ -179,8 +179,7 @@ func memberOf(id int, p pair, v *snapshot.Vector) (snapshot.MemberVal, error) {
 	return m, nil
 }
 
-// writable is the setter gate: ASCOM answers a write to a CanWrite-false
-// switch with NotImplemented, not an error.
+// writable returns NotImplemented for switches that cannot be written.
 func (s *Switch) writable(id int) (pair, *snapshot.Vector, error) {
 	p, v, err := s.resolve(id)
 	if err != nil {
@@ -280,8 +279,7 @@ func (s *Switch) GetSwitchName(id int) (string, error) {
 		return "", err
 	}
 	if p.Member == "" {
-		// The driver fills the vector label from the *_LABELS config, so the
-		// label is the user's own name for the channel.
+		// Use the channel label supplied by the driver.
 		if v.Label != "" {
 			return v.Label, nil
 		}
@@ -372,8 +370,7 @@ func (s *Switch) SetSwitchValue(id int, value float64) error {
 
 func (s *Switch) CanAsync(id int) (bool, error) { return s.CanWrite(id) }
 
-// SetAsync is the plain setter: an INDI send already returns before the state
-// change completes.
+// SetAsync starts an asynchronous property write.
 func (s *Switch) SetAsync(id int, state bool) error { return s.SetSwitch(id, state) }
 
 func (s *Switch) SetAsyncValue(id int, value float64) error { return s.SetSwitchValue(id, value) }

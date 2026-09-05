@@ -14,9 +14,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/supervisor"
 )
 
-// TestSupervisorRealFocuser runs the whole lifecycle against the real
-// simulator: acquire, a move settled via WaitSettle, a SIGKILL with recovery,
-// and ordered shutdown.
 func TestSupervisorRealFocuser(t *testing.T) {
 	build := indiBuild(t)
 	st := snapshot.NewStore()
@@ -53,7 +50,7 @@ func TestSupervisorRealFocuser(t *testing.T) {
 	}
 	waitServing(15 * time.Second)
 
-	// The connected def burst follows CONNECTION Ok asynchronously; await it.
+	// Wait for property definitions to settle, bounded by defSettleMax.
 	propDeadline := time.Now().Add(10 * time.Second)
 	for {
 		if _, ok := st.Current().Vector("Focuser Simulator", "ABS_FOCUS_POSITION"); ok {

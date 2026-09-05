@@ -35,17 +35,7 @@ func (w *Writer) EnableBLOB(device, mode string) error {
 	return w.send(sb.String())
 }
 
-// PingReply echoes a driver's pingRequest.
-//
-// It is not a keepalive. libindi uses the ping as the RELEASE HANDSHAKE for a shared-buffer BLOB:
-// having handed over an attached fd, the driver sends <pingRequest uid='SetBLOB/N'/> and blocks in
-// waitPingReply until the peer echoes it, because that is how it learns the buffer may be recycled.
-// A peer that never replies costs the driver the full timeout — maxWaitSeconds = 5 in
-// libs/indibase/indidrivermain.c — on every BLOB after the first, and then it proceeds anyway.
-//
-// Measured against a real ASI462MC: 6.66 s per 1 s frame without this, 5.019 s of it dead silence
-// on the wire between the last CCD_EXPOSURE tick and the setBLOBVector, with the driver printing
-// "waitPingReply: timeout (5.0s) waiting for ack of SetBLOB/1, proceeding" to stderr each time.
+// PingReply echoes a driver ping, acknowledging shared-buffer BLOB consumption.
 func (w *Writer) PingReply(uid string) error {
 	var sb strings.Builder
 	sb.WriteString("<pingReply")

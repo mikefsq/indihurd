@@ -12,9 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// A recording is recMagic then records of "type byte | uint32 LE length |
-// payload": 'R' bytes read from the peer, 'W' bytes written to it, 'F' an fd
-// that arrived at this point in the R-stream, payload being its full content.
+// Recordings contain typed, length-prefixed read, write, and file-descriptor data.
 const recMagic = "INDIREC1\n"
 
 // Recorder tees a Conn to a recording file.
@@ -158,7 +156,6 @@ func (r *replayReader) Read(p []byte) (int, error) {
 			}
 			r.conn.putFds([]int{fd})
 		case 'W':
-			// our own writes; nothing to replay
 		default:
 			return 0, fmt.Errorf("transport: unknown record type %q", hdr[0])
 		}

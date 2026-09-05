@@ -28,8 +28,7 @@ type Focuser struct {
 	stop func(time.Duration)
 	acts *actions.Engine
 
-	// Some drivers execute a move synchronously and never publish Busy, so
-	// IsMoving reads this bit from Move's return until the driver's echo.
+	// Track motion until acknowledged, including drivers that never publish Busy.
 	move binding.Inflight
 }
 
@@ -65,7 +64,7 @@ func (f *Focuser) Absolute() bool { return f.kit.Has(absProp) }
 // IsMoving reports whether a move is in progress.
 func (f *Focuser) IsMoving() bool {
 	if ok, _ := f.kit.Avail(); !ok {
-		// A stuck in-flight bit would 0x40B every mutating PUT, so it fails rather than holds.
+		// Clear unacknowledged motion when the device becomes unavailable.
 		f.move.Clear()
 		return false
 	}
@@ -124,8 +123,7 @@ func (f *Focuser) Temperature() (float64, error) {
 	return binding.Number(f.kit, table, "Temperature")
 }
 
-// TempCompAvailable is always false: INDI defines no standard
-// temperature-compensation property.
+// TempCompAvailable returns false; INDI has no standard temperature-compensation property.
 func (f *Focuser) TempCompAvailable() bool { return false }
 
 // TempComp reports whether temperature compensation is on.
@@ -171,8 +169,7 @@ func (f *Focuser) Action(name, params string) (string, error) {
 	return f.BaseFocuser.Action(name, params)
 }
 
-// DeviceState answers the Platform 7 batch from one snapshot, so the values are
-// self-consistent.
+// DeviceState reads all values from one snapshot.
 func (f *Focuser) DeviceState() []server.StateValue {
 	snap := f.kit.Snap()
 	if !snap.Valid() {

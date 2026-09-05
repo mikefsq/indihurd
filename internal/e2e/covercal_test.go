@@ -18,12 +18,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/host"
 )
 
-// Neither auxiliary simulator is in the default build set; build them with
-//
-//	cmake --build build/indi --target indi_simulator_lightpanel indi_simulator_dustcover
-//
-// Each implements only one half of CoverCalibrator, so between them they cover
-// the "either half may be absent" contract.
+// These simulators exercise the cover and calibrator independently; see DRIVERS.md.
 const (
 	lightpanelSim = "drivers/auxiliary/indi_simulator_lightpanel"
 	dustcoverSim  = "drivers/auxiliary/indi_simulator_dustcover"
@@ -96,8 +91,6 @@ func covercalWait(t *testing.T, what string, cond func() (bool, error)) {
 	t.Fatalf("timeout waiting for %s", what)
 }
 
-// TestCoverCalCalibrator exercises the calibrator half against the Light Panel
-// Simulator, which implements no cover half.
 func TestCoverCalCalibrator(t *testing.T) {
 	url, _ := startCoverCal(t, 47651, lightpanelSim, "Light Panel Simulator", "FLAT_LIGHT_CONTROL", host.IndiBlock{})
 	c := client.NewCoverCalibrator(url, 0)
@@ -165,8 +158,6 @@ func TestCoverCalCalibrator(t *testing.T) {
 	}
 }
 
-// TestCoverCalCover exercises the cover half against the Dust Cover Simulator,
-// which implements no calibrator half.
 func TestCoverCalCover(t *testing.T) {
 	url, _ := startCoverCal(t, 47652, dustcoverSim, "Dust Cover Simulator", "CAP_PARK", host.IndiBlock{
 		// The sim's default 5s per move is dead time; its OPERATION_DURATION

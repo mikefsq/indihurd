@@ -16,8 +16,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality is the drift gate: every server.CoverCalibrator member has
-// exactly one table entry, and no entry is stale.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.CoverCalibrator)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -169,7 +167,6 @@ func TestCoverAlertIsError(t *testing.T) {
 	}
 }
 
-// TestHalvesAbsent: a missing half is NotPresent, never fabricated.
 func TestHalvesAbsent(t *testing.T) {
 	// Cover only (dust cap).
 	fx := newFixture(t, `
@@ -205,8 +202,6 @@ func TestHalvesAbsent(t *testing.T) {
 	}
 }
 
-// TestCalibratorOnSequence: intensity BEFORE the on switch, so the light comes
-// on at the requested brightness.
 func TestCalibratorOnSequence(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.CalibratorOn(200); err != nil {
@@ -264,7 +259,6 @@ func TestHaltCover(t *testing.T) {
 	}
 }
 
-// TestDeadChild: 0x407 on initiators, motion flags false.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	if err := fx.dev.OpenCover(); err != nil {

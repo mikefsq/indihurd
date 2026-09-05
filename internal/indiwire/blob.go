@@ -5,8 +5,7 @@ import (
 	"io"
 )
 
-// blobContent decodes quad-by-quad so the encoded form is never held whole; a
-// 62 MP frame is ~165 MB of base64.
+// blobContent streams base64 into decoded bytes without buffering the encoded payload.
 func (p *Parser) blobContent(e *Element, m *Member, closeTag string) error {
 	var sink io.Writer
 	var buf []byte // accumulate into Member.Data when no sink is set
@@ -72,9 +71,7 @@ func (p *Parser) blobContent(e *Element, m *Member, closeTag string) error {
 	}
 }
 
-// decodeQuad decodes one base64 quantum: "xx==" yields one byte, "xxx=" two,
-// and '=' anywhere else is malformed. Padding is decided once, up front,
-// because a per-'=' count would overwrite n=1 with n=2 on an "xx==" quad.
+// decodeQuad decodes one base64 quantum and validates its padding.
 func decodeQuad(quad *[4]byte, out *[3]byte) (int, error) {
 	n := 3
 	switch {

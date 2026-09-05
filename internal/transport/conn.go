@@ -8,9 +8,7 @@ import (
 	"syscall"
 )
 
-// Conn is one INDI peer: an io.Reader/Writer for the XML stream plus, on
-// fd-capable transports, a FIFO of file descriptors received as SCM_RIGHTS
-// ancillary data.
+// Conn carries an INDI byte stream and received file descriptors in arrival order.
 type Conn struct {
 	r        reader
 	w        io.Writer
@@ -18,8 +16,7 @@ type Conn struct {
 	shutdown func() error // nil where the transport has no half-close
 
 	mu sync.Mutex // guards fds and closed: Close may race the read loop
-	// Queued in arrival order by the same Read calls that feed the parser,
-	// which is what keeps an attached='true' element and its fd correlated.
+	// Read queues descriptors in stream order to match attached BLOBs.
 	fds    []int
 	closed bool
 }
@@ -54,9 +51,8 @@ func (c *Conn) putFds(fds []int) (queued int) {
 	return len(c.fds)
 }
 
-// Shutdown makes a blocked read return EOF without releasing the fd number,
-// which is what a goroutine racing the read loop must use: Close frees the
-// number, and a reused fd would be read as the driver's stream.
+// Shutdown unblocks reads without releasing the fd number.
+// Use it when another goroutine may still be reading.
 func (c *Conn) Shutdown() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

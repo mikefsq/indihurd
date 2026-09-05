@@ -27,7 +27,7 @@ type Weather struct {
 	avg float64 // AveragePeriod in hours, bridge-held
 }
 
-// Open starts the acquire loop and returns immediately, always.
+// Open starts the acquire loop and returns immediately.
 func (d *Weather) Open(ctx context.Context) error {
 	d.stop = server.RunLoop(ctx, d.ID, d.kit.Run)
 	return nil
@@ -48,9 +48,7 @@ func (d *Weather) Connecting() bool {
 	return !ok
 }
 
-// sensor resolves one ASCOM sensor to its WEATHER_PARAMETERS member by
-// standard name, else by label. Label matching is exact, never substring: a
-// substring match mis-binds.
+// sensor resolves a standard member name, then an exact label match.
 func (d *Weather) sensor(member string) (snapshot.MemberVal, error) {
 	e, ok := table[member]
 	if !ok || e.Elem == "" {
@@ -106,8 +104,7 @@ func (d *Weather) wind(member string) (float64, error) {
 func (d *Weather) WindGust() (float64, error)  { return d.wind("WindGust") }
 func (d *Weather) WindSpeed() (float64, error) { return d.wind("WindSpeed") }
 
-// AveragePeriod is bridge-held: a stored period round-trips, but readings are
-// instantaneous and no averaging is performed.
+// AveragePeriod retains the requested value; readings remain instantaneous.
 func (d *Weather) AveragePeriod() float64 {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -124,8 +121,7 @@ func (d *Weather) SetAveragePeriod(v float64) error {
 	return nil
 }
 
-// SensorDescription names the INDI member and its label, which is where
-// drivers disclose units.
+// SensorDescription returns the INDI member name and label.
 func (d *Weather) SensorDescription(name string) (string, error) {
 	m, err := d.sensor(name)
 	if err != nil {

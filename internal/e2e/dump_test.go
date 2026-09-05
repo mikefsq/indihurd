@@ -12,8 +12,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/host"
 )
 
-// TestDump checks the dump subcommand's two modes: -pre stops at the
-// pre-connect burst, full connects and includes the trailing def burst.
 func TestDump(t *testing.T) {
 	exe := filepath.Join(indiBuild(t), focusSim)
 	run := func(pre bool) string {

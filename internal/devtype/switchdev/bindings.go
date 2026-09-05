@@ -2,8 +2,7 @@ package switchdev
 
 import "github.com/mikefsq/indihurd/internal/binding"
 
-// The Switch table, in mapping-reference order. Rows operate on the flattened
-// id space, not on a single INDI property.
+// table maps ASCOM members to flattened switch IDs.
 var table = binding.Table{
 	"MaxSwitch":            {Kind: binding.Derived, Why: "count of pinned (property, member) pairs — enumeration pinned on first sight"},
 	"GetSwitch":            {Kind: binding.Func, Fn: "GetSwitch"},
@@ -16,17 +15,15 @@ var table = binding.Table{
 	"GetSwitchName":        {Kind: binding.Func, Fn: "GetSwitchName", Why: "member label (driver fills it from *_LABELS); the vector's for an ON/OFF pair"},
 	"GetSwitchDescription": {Kind: binding.Func, Fn: "GetSwitchDescription", Why: "names the source vector — outlet 3 vs dew channel 3"},
 	"SetSwitchName":        {Kind: binding.Absent, Why: "not in INDI"},
-	"CanWrite":             {Kind: binding.Derived, Why: "Perm != IP_RO — every INPUT_* and sensor reading is read-only"},
-	"CanAsync":             {Kind: binding.Derived, Why: "writable — the checkable superset of 'the vector goes Busy'; SetAsync is the same non-blocking send"},
+	"CanWrite":             {Kind: binding.Derived, Why: "writable unless permission is read-only"},
+	"CanAsync":             {Kind: binding.Derived, Why: "writable properties accept asynchronous sends"},
 	"SetAsync":             {Kind: binding.Func, Fn: "SetAsync"},
 	"SetAsyncValue":        {Kind: binding.Func, Fn: "SetAsyncValue"},
 	"StateChangeComplete":  {Kind: binding.Derived, Why: "vector state left Busy"},
-	"CancelAsync":          {Kind: binding.Absent, Why: "spec  maps it to 'the driver's abort where one exists' — no standard OUTPUT/INPUT/POWER vector defines one"},
+	"CancelAsync":          {Kind: binding.Absent, Why: "no standard abort property for switch operations"},
 }
 
-// families are the contributing INDI properties; numbered entries match
-// NAME_<n>. Momentary operations (POWER_CYCLE, POWER_OFF_DISCONNECT) are
-// deliberately absent: they belong to Actions, not the switch id space.
+// families identifies switch properties. Momentary operations remain passthrough actions.
 var families = []struct {
 	name     string
 	numbered bool
@@ -46,6 +43,5 @@ var families = []struct {
 	{"DEW_CURRENTS", false},
 }
 
-// consumed is a rule, not a list: family property names are driver-generated
-// (DIGITAL_OUTPUT_3, POWER_CHANNELS…), so no table row can name them.
+// consumed matches dynamically named switch properties.
 var consumed binding.Consumed = consumedByMapping

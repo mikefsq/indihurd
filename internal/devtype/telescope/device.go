@@ -57,15 +57,14 @@ type Telescope struct {
 	settleTime   int
 	axisMoving   [2]bool // Slewing must reflect this; the INDI motion switches alone must not
 
-	// One Inflight per initiator/completion pair, covering the
-	// send-to-first-echo window and drivers that move silently.
+	// Track each operation until the driver acknowledges it.
 	slew   binding.Inflight
 	guide  binding.Inflight
 	parkOp binding.Inflight // park and unpark share the vector, so one bit
 	home   binding.Inflight
 }
 
-// Open starts the acquire loop and returns immediately, always.
+// Open starts the acquire loop and returns immediately.
 func (d *Telescope) Open(ctx context.Context) error {
 	d.stop = server.RunLoop(ctx, d.ID, d.kit.Run)
 	return nil
@@ -120,8 +119,7 @@ func (d *Telescope) sendSwitch(prop string, on []string, off []string) error {
 	return d.kit.SendSwitch(context.Background(), prop, on, off)
 }
 
-// setCoordMode must run before the coordinate write, or the mount syncs when
-// you meant to slew.
+// setCoordMode selects slew or sync before a coordinate write.
 func (d *Telescope) setCoordMode(mode string) error {
 	if !d.kit.Has(coordMode) {
 		return nil // single-mode drivers slew on coordinate writes
@@ -280,9 +278,7 @@ func (d *Telescope) SlewToAltAz(az, alt float64) error {
 }
 
 func (d *Telescope) syncCoords(ra, dec float64) error {
-	// ALIGNMENT_SUBSYSTEM_ACTIVE defaults off, and a sync recorded while it is
-	// off succeeds invisibly: nothing it records reaches the reported
-	// coordinates. Enable it before the first sync.
+	// Enable alignment before sync so the driver applies the recorded coordinates.
 	if d.kit.Has(alignProp) && !d.switchOn(alignProp, alignElem) {
 		if err := d.sendSwitch(alignProp, []string{alignElem}, nil); err != nil {
 			return err
@@ -294,8 +290,7 @@ func (d *Telescope) syncCoords(ra, dec float64) error {
 	if err := d.send(eqProp, map[string]float64{"RA": ra, "DEC": dec}); err != nil {
 		return err
 	}
-	// A sync echoes state only; the coordinates follow on the driver's next
-	// poll. Wait for them, or the next read serves pre-sync coordinates.
+	// Wait for the coordinate update after the sync acknowledgement.
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if d.kit.StateOf(eqProp) == indiwire.Alert {
@@ -327,8 +322,7 @@ func (d *Telescope) SyncToAltAz(float64, float64) error {
 // unpark, home or MoveAxis), never for the manual-motion switches alone.
 func (d *Telescope) Slewing() bool {
 	if ok, _ := d.kit.Avail(); !ok {
-		// Dead child: in-flight state must fail, not hold. A stuck true here
-		// feeds Busy() and 40Bs every mutating PUT until restart.
+		// Clear unacknowledged motion when the device becomes unavailable.
 		d.mu.Lock()
 		d.axisMoving = [2]bool{}
 		d.mu.Unlock()
@@ -437,8 +431,7 @@ func (d *Telescope) SetTracking(on bool) error {
 	if err := d.sendSwitch(trackState, []string{member}, nil); err != nil {
 		return err
 	}
-	// Read-after-write fence: the driver's echo trails the send, and clients
-	// read Tracking straight back. A timeout only logs; the send succeeded.
+	// Wait for the driver echo before returning to a client that may read Tracking.
 	if err := d.kit.Send.WaitUpdate(context.Background(), d.kit.DeviceName(), trackState, since, 3*time.Second); err != nil {
 		d.kit.Logf("SetTracking: no echo for %s: %v", trackState, err)
 	}
@@ -474,7 +467,6 @@ func (d *Telescope) SetTrackingRate(r server.DriveRate) error {
 			if err := d.sendSwitch(trackMode, []string{member}, nil); err != nil {
 				return err
 			}
-			// Same read-after-write fence as SetTracking.
 			if err := d.kit.Send.WaitUpdate(context.Background(), d.kit.DeviceName(), trackMode, since, 3*time.Second); err != nil {
 				d.kit.Logf("SetTrackingRate: no echo for %s: %v", trackMode, err)
 			}
@@ -625,13 +617,11 @@ func (d *Telescope) MoveAxis(axis server.TelescopeAxis, rate float64) error {
 	d.mu.Lock()
 	d.axisMoving[idx] = true
 	d.mu.Unlock()
-	// Magnitude selects nothing: the direction switch runs at the mount's
-	// current rate.
+	// Direction uses the currently selected INDI slew rate.
 	return d.sendSwitch(prop, []string{member}, nil)
 }
 
-// setSite writes GEOGRAPHIC_COORD complete, with current values substituted:
-// INDI::Telescope reads values[-1] on a partial write and the child dies.
+// setSite writes the complete GEOGRAPHIC_COORD vector to avoid libindi partial-write errors.
 func (d *Telescope) setSite(elem string, v float64) error {
 	vec, err := d.kit.Vector(geoProp)
 	if err != nil {
@@ -648,8 +638,7 @@ func (d *Telescope) setSite(elem string, v float64) error {
 	if err := d.send(geoProp, vals); err != nil {
 		return err
 	}
-	// Sync points recorded at the old site make the alignment transform report
-	// garbage, so clear the driver-side DB after moving the observer.
+	// Changing the observer location invalidates the alignment database.
 	if elem != "ELEV" && d.kit.Has("ALIGNMENT_POINTSET_ACTION") {
 		if err := d.sendSwitch("ALIGNMENT_POINTSET_ACTION", []string{"CLEAR"}, nil); err != nil {
 			return err
@@ -678,8 +667,7 @@ func (d *Telescope) SiteLongitude() float64 {
 }
 
 func (d *Telescope) SetSiteLongitude(v float64) error {
-	// The ASCOM domain check must run before the 0–360 conversion, or -190
-	// wraps to a plausible 170.
+	// Validate before wrapping longitude into the INDI range.
 	if v < -180 || v > 180 {
 		return binding.InvalidValue(fmt.Sprintf("SiteLongitude %g is outside ±180", v))
 	}
@@ -713,8 +701,7 @@ func (d *Telescope) SetUTCDate(s string) error {
 	if err != nil {
 		return err
 	}
-	// TIME_UTC must be written complete: a UTC-only write reads texts[-1] and
-	// kills the child, the same hazard as GEOGRAPHIC_COORD.
+	// Include OFFSET; libindi requires a complete TIME_UTC vector.
 	off := "0"
 	if m, ok := v.Member("OFFSET"); ok && m.Text != "" {
 		off = m.Text

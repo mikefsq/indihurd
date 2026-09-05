@@ -28,9 +28,8 @@ func longitudeToINDI(l float64) float64 {
 	return l
 }
 
-// raRateToASCOM: INDI TRACK_RATE_RA is absolute arcsec per SI second, ASCOM
-// RightAscensionRate an offset from sidereal in seconds of RA per sidereal
-// second. Both read 0 when tracking normally.
+// raRateToASCOM converts absolute arcseconds per SI second to a sidereal offset
+// in seconds of RA per sidereal second.
 func raRateToASCOM(indiArcsecPerSec float64) float64 {
 	return (indiArcsecPerSec - trackrateSidereal) / 15.0 * siPerSiderealSec
 }
@@ -39,8 +38,6 @@ func raRateToINDI(ascomSecRAPerSidSec float64) float64 {
 	return ascomSecRAPerSidSec/siPerSiderealSec*15.0 + trackrateSidereal
 }
 
-// Dec rates: both sides are arcsec per SI second defaulting to 0, so offset
-// and absolute coincide.
 func decRateToASCOM(indi float64) float64 { return indi }
 func decRateToINDI(ascom float64) float64 { return ascom }
 

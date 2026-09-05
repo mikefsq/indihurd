@@ -26,14 +26,7 @@ func Run(ctx context.Context, f *File, logf func(string, ...any)) error {
 		if !e.Enabled() {
 			continue
 		}
-		// DiscoveryOff on every server, because the HOST answers for all of them (discovery.go).
-		//
-		// Two things were wrong before. Discovery was never set at all, so each server took
-		// goalpaca's zero value — DiscoveryRegister with no ServerAddr, registering with nothing —
-		// and the host answered `configureddevices` on every port while being findable by nobody.
-		// Setting each server to DiscoveryDirect instead made them each bind 32227 with
-		// SO_REUSEPORT, which answers a BROADCAST from all of them and a UNICAST from exactly one:
-		// a client on this machine saw a single arbitrary device.
+		// The host answers discovery for all device ports.
 		b, err := Build(e, server.Config{
 			AlpacaPort: e.Port,
 			Discovery:  server.DiscoveryConfig{Mode: server.DiscoveryOff},
@@ -50,17 +43,12 @@ func Run(ctx context.Context, f *File, logf func(string, ...any)) error {
 			}(b)
 			continue
 		}
-		// INDI-only: nothing calls Device.Open, so the acquire loop has to run
-		// here or the driver never spawns.
+		// Without an Alpaca server, start the supervisor directly.
 		go func(b *Built) {
 			supervisor.Run(ctx, b.Sup)
 			errs <- nil
 		}(b)
 	}
-	// Discovery follows the Alpaca face and has no switch of its own: serving Alpaca without
-	// announcing it is not a configuration anyone wants. Started AFTER the servers, so the
-	// responder only advertises ports something is listening on, and skipped when the face is off,
-	// since announcing ports that serve nothing sends every client to a closed door.
 	if f.AlpacaEnabled() {
 		runDiscovery(ctx, alpacaPorts, logf)
 	}
@@ -73,7 +61,6 @@ func Run(ctx context.Context, f *File, logf func(string, ...any)) error {
 		for _, b := range built {
 			children = append(children, b.Sup)
 		}
-		// Empty means loopback, not every interface: INDI is unauthenticated.
 		listen := f.IndiListen
 		if listen == "" {
 			listen = "127.0.0.1"

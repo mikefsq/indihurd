@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-// TestHelperFdSender is not a test: with TRANSPORT_HELPER=1 it plays a driver,
-// writing a marker on fd 1 and then sending a memfd via SCM_RIGHTS.
 func TestHelperFdSender(t *testing.T) {
 	if os.Getenv("TRANSPORT_HELPER") != "1" {
 		t.Skip("helper process")
@@ -66,7 +64,6 @@ func readSession(t *testing.T, r io.Reader) []byte {
 	return got.Bytes()
 }
 
-// TestDialExecScmRights checks a spawned child's stream and its SCM_RIGHTS fd.
 func TestDialExecScmRights(t *testing.T) {
 	c := dialHelper(t)
 	stream := readSession(t, c)
@@ -99,8 +96,6 @@ func TestDialExecScmRights(t *testing.T) {
 	}
 }
 
-// TestRecordAndReplay checks a replayed session reproduces the live stream and
-// its blob.
 func TestRecordAndReplay(t *testing.T) {
 	path := t.TempDir() + "/session.indirec"
 	rec, err := NewRecorder(path)
@@ -149,7 +144,6 @@ func TestRecordAndReplay(t *testing.T) {
 	}
 }
 
-// TestDialTCP checks the TCP transport round-trips bytes and never has fds.
 func TestDialTCP(t *testing.T) {
 	l, err := listenLoopback(t)
 	if err != nil {

@@ -9,8 +9,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// Kit is everything a device implementation is given, one per (child, INDI
-// device).
+// Kit provides snapshot access, writes, and lifecycle hooks for one INDI device.
 type Kit struct {
 	Device string // the INDI device name
 
@@ -28,8 +27,6 @@ func (k *Kit) Logf(format string, args ...any) {
 	}
 }
 
-// An ambiguous device name is a config error caught at validation, never
-// guessed here.
 func (k *Kit) name(snap *snapshot.Snapshot) string {
 	if k.Device != "" {
 		return k.Device
@@ -63,8 +60,7 @@ func (k *Kit) DriverIdentity() (name, version, exec string, ok bool) {
 	return n.Text, ver.Text, ex.Text, true
 }
 
-// DescriptionText composes the ASCOM Description at call time, falling back
-// to a static form while the child is down.
+// DescriptionText returns the driver description, with a fallback while unavailable.
 func (k *Kit) DescriptionText() string {
 	name, ver, _, ok := k.DriverIdentity()
 	if !ok {
@@ -229,8 +225,7 @@ func (k *Kit) SendText(ctx context.Context, prop string, v map[string]string) er
 	return sendErr(k.Send.SetText(ctx, k.DeviceName(), prop, v))
 }
 
-// WriteNumberAcked is WriteNumber plus a bounded wait for the driver's echo,
-// so the member's completion property is truthful when the caller returns.
+// WriteNumberAcked writes a number and waits for the driver acknowledgement.
 func WriteNumberAcked(ctx context.Context, k *Kit, tbl Table, member string, value float64, ack time.Duration) error {
 	e, err := k.mapped(tbl, member)
 	if err != nil {

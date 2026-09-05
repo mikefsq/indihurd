@@ -9,12 +9,8 @@ import (
 	"strings"
 )
 
-// Parser is a streaming pull parser for the INDI wire protocol: one call to
-// Next yields one top-level element.
-//
-// The grammar is INDI's, not XML's: no namespaces, no nesting beyond
-// vector→member, entities limited to the five XML basics. Anything malformed
-// is an error; there is no resync.
+// Parser reads top-level INDI elements with a limited XML grammar.
+// It accepts vector/member nesting and the five basic XML entities.
 type Parser struct {
 	r   io.Reader
 	buf []byte
@@ -38,8 +34,7 @@ type BlobMeta struct {
 	Size                             int64
 }
 
-// Bounds on what a runaway child can make the codec buffer. BLOB payloads are
-// exempt; they stream.
+// Limit buffered protocol metadata; BLOB payloads stream separately.
 const (
 	maxToken   = 1 << 20 // longest non-BLOB text/attr value
 	maxMembers = 4096    // members per vector

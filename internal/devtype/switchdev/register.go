@@ -31,7 +31,6 @@ func New(cfg Config, kit *binding.Kit) *Switch {
 	return s
 }
 
-// Description and DriverInfo read DRIVER_INFO lazily: it arrives with the
-// connected def burst, after New has run.
+// Description reads DRIVER_INFO from the current snapshot.
 func (s *Switch) Description() string { return s.kit.DescriptionText() }
 func (s *Switch) DriverInfo() string  { return s.kit.DriverInfoText(s.Version) }

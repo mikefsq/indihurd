@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// TestDecodeQuad checks base64 padding lengths and rejection of stray '='.
 func TestDecodeQuad(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -42,8 +41,6 @@ func TestDecodeQuad(t *testing.T) {
 	}
 }
 
-// TestBlobPaddingOnWire checks a padded in-stream BLOB decodes to its exact
-// length, not NUL-padded.
 func TestBlobPaddingOnWire(t *testing.T) {
 	in := `<setBLOBVector device='D' name='B' state='Ok'>` +
 		`<oneBLOB name='B' size='4' format='.txt' enclen='8'>QUJDRA==</oneBLOB>` +

@@ -12,8 +12,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/transport"
 )
 
-// TestCorpusRecordingParsesClean replays the committed recording in place of a
-// driver, so it needs no INDI install and carries no integration build tag.
 func TestCorpusRecordingParsesClean(t *testing.T) {
 	path := corpus.Recording("indi_simulator_focus.indirec")
 	if _, err := os.Stat(path); err != nil {

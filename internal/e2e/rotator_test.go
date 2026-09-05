@@ -19,12 +19,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/host"
 )
 
-// rotatorSim is not in the default simulator build set; build it with
-//
-//	cmake --build build/indi --target indi_simulator_rotator
-//
-// The test skips when it is absent so `make integration` stays green on a
-// stock build tree.
+// rotatorSim names the optional rotator simulator; see DRIVERS.md for build instructions.
 const rotatorSim = "drivers/rotator/indi_simulator_rotator"
 
 func startRotator(t *testing.T, port int) (string, *host.Built) {
@@ -95,8 +90,6 @@ func rotatorWait(t *testing.T, c *client.Rotator, what string, cond func() (bool
 	t.Fatalf("timeout waiting for %s", what)
 }
 
-// TestRotatorCore exercises the INDI Rotator Simulator's real capability set:
-// absolute move, abort, sync and reverse, but no relative move or step size.
 func TestRotatorCore(t *testing.T) {
 	url, _ := startRotator(t, 47650)
 	c := client.NewRotator(url, 0)

@@ -13,8 +13,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/indiwire"
 )
 
-// blobPolicy is the enableBLOB state for one client; INDI's default is Never,
-// so a client that has not asked receives no BLOBs at all.
+// blobPolicy holds a client BLOB subscription, defaulting to Never.
 type blobPolicy uint8
 
 const (
@@ -33,16 +32,14 @@ func parsePolicy(s string) blobPolicy {
 	return blobNever
 }
 
-// Outbound-queue limits, vars so tests can shrink them. The byte budget must
-// fit one encoded frame: a 4K camera's FITS is ~25 MB, ~34 MB in base64.
+// Queue limits allow a full camera frame while bounding slow-client memory use.
 var (
 	queueMessages = 256
 	queueBytes    = int64(64 << 20)
 	writeTimeout  = 10 * time.Second
 )
 
-// conn is one client. writeLoop is the socket's only writer, so a stalled
-// client never blocks replay or the supervisor-goroutine fan-out.
+// conn holds one client connection and a bounded outbound queue.
 type conn struct {
 	nc  net.Conn
 	srv *Server
@@ -110,7 +107,7 @@ func (c *conn) writeLoop() {
 func (c *conn) serve(ctx context.Context) {
 	defer c.srv.drop(c)
 	p := indiwire.NewParser(c.nc)
-	// We are the server: a client's BLOB payloads are discarded, not buffered.
+	// Discard client BLOB payloads without buffering them.
 	p.BlobSink(func(*indiwire.BlobMeta) io.Writer { return io.Discard })
 	for {
 		el, err := p.Next()
@@ -158,15 +155,13 @@ func (c *conn) policyFor(device, name string) blobPolicy {
 }
 
 func (c *conn) wants(el *indiwire.Element) bool {
-	// delProperty is metadata every client needs to keep its model truthful.
 	if el.Kind == indiwire.KindDel {
 		return true
 	}
 	isBlob := el.Type == indiwire.BLOB && (el.Kind == indiwire.KindSet || el.Kind == indiwire.KindDef)
 	p := c.policyFor(el.Device, el.Name)
 	if isBlob {
-		// A definition always passes: without it a client could never learn
-		// the property exists to enable it.
+		// Clients need definitions before they can subscribe to BLOBs.
 		return el.Kind == indiwire.KindDef || p != blobNever
 	}
 	return p != blobOnly

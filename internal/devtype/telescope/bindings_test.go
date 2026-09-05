@@ -193,8 +193,6 @@ func TrapAssertOrder(t *testing.T, sent []string, first, second string) {
 	}
 }
 
-// TestTrapModeBeforeCoordinates checks that the ON_COORD_SET mode is written
-// before the coordinates, and restored after a sync.
 func TestTrapModeBeforeCoordinates(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if err := fx.dev.SlewToCoordinatesAsync(3.0, 40.0); err != nil {
@@ -219,8 +217,6 @@ func TestTrapModeBeforeCoordinates(t *testing.T) {
 	}
 }
 
-// TestTrapLongitudeSign checks that 282.7°E reads as −77.3° and that the write
-// back carries the complete GEOGRAPHIC_COORD vector.
 func TestTrapLongitudeSign(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if got := fx.dev.SiteLongitude(); math.Abs(got-(-77.3)) > 1e-9 {
@@ -246,8 +242,6 @@ func TestTrapLongitudeSign(t *testing.T) {
 	}
 }
 
-// TestTrapRARateConversion round-trips absolute arcsec/s against offset
-// seconds-of-RA per sidereal second, which both read 0 at sidereal.
 func TestTrapRARateConversion(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	// The fixture's TRACK_RATE_RA is exactly sidereal → offset 0.
@@ -271,7 +265,6 @@ func TestTrapRARateConversion(t *testing.T) {
 	}
 }
 
-// TestTrapPierSide checks the three-valued map and that IP_RO is never writable.
 func TestTrapPierSide(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if got := fx.dev.SideOfPier(); got != server.PierWest {
@@ -291,8 +284,6 @@ func TestTrapPierSide(t *testing.T) {
 	}
 }
 
-// TestTrapSlewingSources checks that EQ Busy and MoveAxis count as slewing but
-// the manual-motion switches alone do not.
 func TestTrapSlewingSources(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if fx.dev.Slewing() {
@@ -332,7 +323,6 @@ func TestTrapSlewingSources(t *testing.T) {
 	}
 }
 
-// TestTrapParkDerivation checks that parking-in-progress does not read parked.
 func TestTrapParkDerivation(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if fx.dev.AtPark() {
@@ -350,8 +340,6 @@ func TestTrapParkDerivation(t *testing.T) {
 	}
 }
 
-// TestTrapParkInitiator checks that Park returns before the driver's echo and
-// that the mount reads parking, not parked, until it arrives.
 func TestTrapParkInitiator(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if err := fx.dev.Park(); err != nil {
@@ -383,8 +371,6 @@ func TestTrapParkInitiator(t *testing.T) {
 	}
 }
 
-// TestTrapInflightDeadChild checks that a slew in flight when the child dies
-// fails rather than holding Busy forever.
 func TestTrapInflightDeadChild(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if err := fx.dev.SlewToCoordinatesAsync(3, 40); err != nil {
@@ -412,8 +398,6 @@ func TestTrapInflightDeadChild(t *testing.T) {
 	}
 }
 
-// TestTrapTargets checks that reading a target before setting it is an error,
-// never a zero.
 func TestTrapTargets(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	if _, err := fx.dev.TargetRightAscension(); errNum(err) != alpaca.ErrNumInvalidOperation {
@@ -429,7 +413,6 @@ func TestTrapTargets(t *testing.T) {
 	}
 }
 
-// TestDerivedSurface covers the derived facts, capabilities and plain reads.
 func TestDerivedSurface(t *testing.T) {
 	fx := newFixture(t, mountDefs)
 	d := fx.dev

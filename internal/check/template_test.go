@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-// TestDevtypeTemplate enforces the per-type package file shape.
 func TestDevtypeTemplate(t *testing.T) {
 	root := repoRoot(t)
 	dirs, err := filepath.Glob(filepath.Join(root, "internal", "devtype", "*"))

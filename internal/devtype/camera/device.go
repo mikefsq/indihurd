@@ -53,7 +53,7 @@ type Camera struct {
 	stop func(time.Duration)
 	acts *actions.Engine
 
-	// some drivers never publish Busy on CCD_EXPOSURE or the guide vectors
+	// Some drivers acknowledge operations without publishing Busy.
 	exposure binding.Inflight
 	guide    binding.Inflight
 
@@ -87,8 +87,7 @@ func (c *Camera) Connecting() bool {
 	return !ok
 }
 
-// Busy stays false: gating PUTs on the exposure would reject the cooler
-// changes clients make routinely mid-exposure.
+// Busy returns false so cooler settings remain writable during exposure.
 func (c *Camera) Busy() bool { return false }
 
 func (c *Camera) member(prop, elem string) (snapshot.MemberVal, bool) {
@@ -272,8 +271,7 @@ func (c *Camera) IngestBlob(prop, member, format string, data []byte) {
 	c.mu.Unlock()
 }
 
-// maxInflated caps a compressed frame's expansion: well above a real frame (a
-// 62 MP RAW16 FITS is ~124 MB), well below a zlib bomb.
+// maxInflated limits decompressed frame data to 1 GiB.
 const maxInflated = 1 << 30
 
 func inflate(data []byte) ([]byte, error) {
@@ -434,8 +432,7 @@ func (c *Camera) CCDTemperature() (float64, error) {
 
 func (c *Camera) CanSetCCDTemperature() bool { return c.writable(tempProp) }
 
-// SetCCDTemperature reports the retained setpoint; CCD_TEMPERATURE carries the
-// current temperature, not the target.
+// SetCCDTemperature returns the retained target temperature.
 func (c *Camera) SetCCDTemperature() (float64, error) {
 	c.mu.Lock()
 	if c.coolSet {
@@ -485,8 +482,7 @@ func (c *Camera) CoolerPower() (float64, error) {
 	return 0, binding.NotImplemented("CoolerPower")
 }
 
-// findControl locates a control by standard property first, else by an exact
-// lowercased name/label match: substring matching binds AutoExpMaxGain as Gain.
+// findControl prefers the standard property, then an exact name or label match.
 func (c *Camera) findControl(stdProp, stdElem, name string) (prop, elem string, ok bool) {
 	if _, mok := c.member(stdProp, stdElem); mok {
 		return stdProp, stdElem, true
@@ -547,8 +543,7 @@ func (c *Camera) OffsetMax() int { m, _ := c.control(c.offsetSource); return int
 func (c *Camera) SetGain(v int) error   { return c.setControl(c.gainSource, "Gain", v) }
 func (c *Camera) SetOffset(v int) error { return c.setControl(c.offsetSource, "Offset", v) }
 
-// setControl writes only the discovered member; vendor drivers apply partial
-// number vectors.
+// setControl writes the selected member as a partial number vector.
 func (c *Camera) setControl(src func() (string, string, bool), member string, v int) error {
 	prop, elem, ok := src()
 	if !ok {

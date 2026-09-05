@@ -93,8 +93,6 @@ func waitConns(t *testing.T, srv *Server, n int) {
 const focuserDefs = `<defNumberVector device='Fake' name='POS' state='Ok' perm='rw'>` +
 	`<defNumber name='V' format='%g' min='0' max='100' step='1'>1</defNumber></defNumberVector>`
 
-// TestStalledClientDropped: a client that stops reading is dropped without
-// blocking Publish, and a healthy client keeps receiving throughout.
 func TestStalledClientDropped(t *testing.T) {
 	oldM, oldB, oldW := queueMessages, queueBytes, writeTimeout
 	queueMessages, queueBytes, writeTimeout = 8, 1<<20, 500*time.Millisecond
@@ -163,7 +161,6 @@ func TestStalledClientDropped(t *testing.T) {
 	}
 }
 
-// TestPingReply: pingRequest in, pingReply with the same uid out.
 func TestPingReply(t *testing.T) {
 	srv := startServer(t, newFakeChild(t, focuserDefs))
 	nc := dialServer(t, srv)
@@ -181,8 +178,6 @@ func TestPingReply(t *testing.T) {
 	}
 }
 
-// TestReplayThroughQueue: getProperties replay reaches the client through the
-// writer goroutine.
 func TestReplayThroughQueue(t *testing.T) {
 	srv := startServer(t, newFakeChild(t, focuserDefs))
 	nc := dialServer(t, srv)

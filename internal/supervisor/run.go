@@ -12,8 +12,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/transport"
 )
 
-// Run is the acquire loop: it spawns, serves, and retries with capped backoff,
-// returning only when ctx ends.
+// Run spawns and reconnects the driver with capped backoff until ctx ends.
 func Run(ctx context.Context, s *Supervisor) {
 	base, cap, _, _ := s.defaults()
 	bo := newBackoff(base, cap)
@@ -96,8 +95,7 @@ func (s *Supervisor) attempt(ctx context.Context) (served bool) {
 		return false
 	}
 
-	// A driver whose hardware is absent holds CONNECTION Alert and then sends
-	// nothing, so the CONNECT retry has to come from a timer, not the read loop.
+	// Retry CONNECT on a timer when unavailable hardware leaves the driver silent.
 	nudgeDone := make(chan struct{})
 	defer close(nudgeDone)
 	go func() {
@@ -115,10 +113,7 @@ func (s *Supervisor) attempt(ctx context.Context) (served bool) {
 		}
 	}()
 
-	// The parser blocks in recvmsg, so only poisoning the conn unblocks it for
-	// shutdown. Shutdown, not Close: this goroutine races the read loop, and
-	// Close would free the fd number while the reader can still enter Recvmsg,
-	// where a reused fd would be read as the driver's stream.
+	// Shutdown unblocks recvmsg without releasing an fd that the reader may still use.
 	go func() {
 		select {
 		case <-cctx.Done():
@@ -145,8 +140,7 @@ func (s *Supervisor) readLoop(ctx context.Context, p *indiwire.Parser, conn *tra
 			if ctx.Err() != nil {
 				return served
 			}
-			// Invalidate before the phase flips: a reader that observes
-			// not-Serving must never then load a data-bearing snapshot.
+			// Invalidate data before publishing the unavailable phase.
 			gone := s.store.Current().Devices()
 			s.store.Invalidate()
 			s.transition(PhaseRetrying, reasonf("child stream ended: %v", err))
@@ -161,23 +155,12 @@ func (s *Supervisor) readLoop(ctx context.Context, p *indiwire.Parser, conn *tra
 }
 
 func (s *Supervisor) apply(el *indiwire.Element, conn *transport.Conn) {
-	// Attached BLOB fds must be consumed in stream order whether or not anyone
-	// wants them; an unclaimed fd leaks.
+	// Consume attached file descriptors in stream order, even when discarding payloads.
 	if (el.Kind == indiwire.KindSet || el.Kind == indiwire.KindDef) && el.Type == indiwire.BLOB {
 		s.deliverBlobs(el, conn)
 	}
 
-	// Answer a driver's ping BEFORE anything else, including the BLOB delivery above.
-	//
-	// The ping is libindi's release handshake for a shared-buffer BLOB, not a keepalive: the driver
-	// blocks in waitPingReply until the echo arrives, so a late reply is a stalled driver and no
-	// reply at all costs it a 5 s timeout per BLOB (see Writer.PingReply). Replying here — on the
-	// read loop, ahead of the mmap and the consumers — keeps the driver moving while this side does
-	// its own work with the buffer, which is exactly what indiserver does and why the same driver
-	// is nearly 4x faster under it.
-	//
-	// The fd has already been claimed by deliverBlobs above, so the buffer really is ours to
-	// acknowledge by the time this runs.
+	// Acknowledge the ping after consuming prior BLOBs so the driver can reuse its buffer.
 	if el.Kind == indiwire.KindPing {
 		if err := s.rawWrite(func(w *indiwire.Writer) error { return w.PingReply(el.Name) }); err != nil {
 			s.logf("%s: pingReply %s failed: %v", s.cfg.Name, el.Name, err)
@@ -287,15 +270,13 @@ func (s *Supervisor) evalConnection(el *indiwire.Element) {
 	}
 	switch {
 	case on && (el.State == indiwire.Ok || el.State == indiwire.Idle):
-		// Busy means the driver is still opening hardware; Idle with CONNECT
-		// already On is how auto-connecting drivers report success.
+		// CONNECT On with Idle is valid for auto-connecting drivers.
 		if s.Phase() != PhaseServing {
 			s.transition(PhaseServing, "")
 			s.onServing(el.Device)
 		}
 	case el.State == indiwire.Alert:
-		// The child is live and only the hardware refused, so stay Acquiring
-		// and let the nudge retry rather than respawning.
+		// Retry hardware connection without respawning the live driver.
 		msg := el.Message
 		if msg == "" {
 			msg = "CONNECTION Alert"
@@ -341,8 +322,7 @@ func (s *Supervisor) sendConnect(device string) {
 		return
 	}
 	if !s.presetsBeforeConnectDone() {
-		// A preset naming a property no driver defines holds here forever,
-		// reported via Reason, rather than connecting half-configured.
+		// Do not connect until every before-connect preset has been applied.
 		s.transition(PhaseAcquiring, "waiting to apply before-connect presets")
 		return
 	}

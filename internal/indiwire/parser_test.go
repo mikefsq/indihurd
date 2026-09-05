@@ -163,8 +163,6 @@ func TestBlobAttached(t *testing.T) {
 	}
 }
 
-// TestOneByteReads feeds the stream a byte at a time to exercise every
-// buffer-boundary path in the scanner.
 func TestOneByteReads(t *testing.T) {
 	in := defNumber + `<setNumberVector device='CCD Simulator' name='CCD_EXPOSURE' state='Busy'><oneNumber name='CCD_EXPOSURE_VALUE'>0.75</oneNumber></setNumberVector>`
 	p := NewParser(iotest{strings.NewReader(in)})

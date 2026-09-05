@@ -65,13 +65,12 @@ func (d *Safety) allOk(prop string) bool {
 	if v.State == indiwire.Busy || v.State == indiwire.Alert {
 		return false
 	}
-	// Weather drivers publish the overall verdict on the vector state alone and leave
-	// the member lights Idle, so either level counts as evidence of safety.
+	// Some drivers report safety through the vector state without updating member lights.
 	return v.State == indiwire.Ok || membersOk
 }
 
-// IsSafe reads SAFETY_STATUS where the driver publishes one, else the WEATHER_STATUS
-// lights; anything short of Ok, including an absent property or a down child, is unsafe.
+// IsSafe uses SAFETY_STATUS, falling back to WEATHER_STATUS.
+// Missing properties and unavailable devices are unsafe.
 func (d *Safety) IsSafe() bool {
 	if ok, _ := d.kit.Avail(); !ok {
 		return false

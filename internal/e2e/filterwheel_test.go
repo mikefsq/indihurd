@@ -63,8 +63,6 @@ func startWheel(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestFilterWheelConformance runs the ConformU checks against the real INDI
-// wheel simulator, whose 1 s per-move delay makes the moving sentinel visible.
 func TestFilterWheelConformance(t *testing.T) {
 	old := conformance.SettleTimeout
 	conformance.SettleTimeout = 60 * time.Second

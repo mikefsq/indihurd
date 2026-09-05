@@ -65,8 +65,6 @@ func startActionsFocuser(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestActionsPassthrough checks the INDI: action namespace filter and a
-// write→read round trip, over real HTTP against the INDI focus simulator.
 func TestActionsPassthrough(t *testing.T) {
 	url, _ := startActionsFocuser(t, 47630)
 	f := client.NewFocuser(url, 0)

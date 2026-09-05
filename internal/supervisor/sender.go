@@ -9,8 +9,8 @@ import (
 	"github.com/mikefsq/indihurd/internal/indiwire"
 )
 
-// The raw variants skip the Serving gate because CONNECT must be sendable
-// while Acquiring. All writes serialize on mu: interleaved XML is corruption.
+// Raw writes bypass the Serving gate for connection setup.
+// All writes serialize on mu.
 
 func (s *Supervisor) rawWrite(f func(w *indiwire.Writer) error) error {
 	s.mu.Lock()
@@ -67,12 +67,8 @@ func (s *Supervisor) SetText(ctx context.Context, device, prop string, v map[str
 	return s.rawWrite(func(w *indiwire.Writer) error { return w.SetText(device, prop, v) })
 }
 
-// WaitSettle blocks until the vector has been updated after `since` and is not
-// Busy, returning its final state and the driver's message.
-//
-// Capture `since` before the send: a set is async, so without that fence a fast
-// caller settles against the pre-send state. Zero means the current state,
-// whenever it was reported.
+// WaitSettle waits for a non-Busy update after since and returns its state and message.
+// Capture since before sending; zero accepts the current state.
 func (s *Supervisor) WaitSettle(ctx context.Context, device, prop string, since time.Time, timeout time.Duration) (indiwire.State, string, error) {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
@@ -102,12 +98,7 @@ func (s *Supervisor) WaitSettle(ctx context.Context, device, prop string, since 
 	}
 }
 
-// WaitUpdate blocks until prop has been updated after `since`, Busy counting
-// as an update.
-//
-// It is the initiator's acknowledgment fence: a client polls the completion
-// property the moment the initiator returns, so returning before the driver's
-// echo makes the in-progress flag lie.
+// WaitUpdate waits for any update after since, including Busy.
 func (s *Supervisor) WaitUpdate(ctx context.Context, device, prop string, since time.Time, timeout time.Duration) error {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
@@ -137,7 +128,6 @@ func (s *Supervisor) WaitUpdate(ctx context.Context, device, prop string, since 
 	}
 }
 
-// Waiters re-check the snapshot after every wake, so spurious wakes are harmless.
 type waiters struct {
 	mu sync.Mutex
 	m  map[string][]chan error

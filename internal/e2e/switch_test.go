@@ -16,12 +16,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/host"
 )
 
-// ioSim is not in the default simulator build set; build it with
-//
-//	cmake --build build/indi --target indi_simulator_io
-//
-// The test skips when it is absent so `make integration` stays green on a
-// stock build tree.
+// ioSim names the optional I/O simulator; see DRIVERS.md for build instructions.
 const ioSim = "drivers/io/indi_simulator_io"
 
 func startSwitch(t *testing.T, port int) (string, *host.Built) {
@@ -78,8 +73,6 @@ func startSwitch(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestSwitchFlattening pins Simulator IO's enumeration (4 inputs, 4 outputs, 4
-// pulse durations), the derived CanWrite split, and a write→read round trip.
 func TestSwitchFlattening(t *testing.T) {
 	url, _ := startSwitch(t, 47631)
 	c := client.NewSwitch(url, 0)

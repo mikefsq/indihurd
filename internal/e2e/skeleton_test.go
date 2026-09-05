@@ -67,8 +67,6 @@ func startSkeleton(t *testing.T, port int) (string, *host.Built) {
 	return "", nil
 }
 
-// TestFocuserConformance runs the ConformU checks against the real INDI focus
-// simulator, whose full-range move needs the raised SettleTimeout.
 func TestFocuserConformance(t *testing.T) {
 	old := conformance.SettleTimeout
 	conformance.SettleTimeout = 60 * time.Second
@@ -80,9 +78,6 @@ func TestFocuserConformance(t *testing.T) {
 	conformance.CheckFocuser(t, f)
 }
 
-// TestSkeletonSoak kills the child mid-session and checks, through the Alpaca
-// surface, that Connected stays true, members answer 0x407 with the reason,
-// Connecting() reports the re-acquire, and recovery completes.
 func TestSkeletonSoak(t *testing.T) {
 	url, b := startSkeleton(t, 47612)
 	f := client.NewFocuser(url, 0)
@@ -127,9 +122,6 @@ func TestSkeletonSoak(t *testing.T) {
 	}
 }
 
-// TestLifetimeIndependence checks that a client disconnect, which does clear
-// the shared Connected flag, never touches the child, its CONNECTION, or the
-// driver's state.
 func TestLifetimeIndependence(t *testing.T) {
 	url, b := startSkeleton(t, 47613)
 	a := client.NewFocuser(url, 0)

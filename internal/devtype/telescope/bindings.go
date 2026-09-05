@@ -2,7 +2,6 @@ package telescope
 
 import "github.com/mikefsq/indihurd/internal/binding"
 
-// The Telescope table, in mapping-reference order.
 var table = binding.Table{
 	"RightAscension":       {Kind: binding.Mapped, Prop: "EQUATORIAL_EOD_COORD", Elem: "RA"},
 	"Declination":          {Kind: binding.Mapped, Prop: "EQUATORIAL_EOD_COORD", Elem: "DEC"},
@@ -14,16 +13,16 @@ var table = binding.Table{
 
 	"SlewToCoordinates":      {Kind: binding.Func, Fn: "slewSync", Why: "mode TRACK, then EQUATORIAL_EOD_COORD write, then fenced settle (blocking form)"},
 	"SlewToCoordinatesAsync": {Kind: binding.Func, Fn: "slewAsync", Why: "mode TRACK, then coordinates; Slewing is the completion"},
-	"SlewToTarget":           {Kind: binding.Func, Fn: "SlewToTarget", Why: "retained targets through the same TRACK-mode slew — ASCOM draws no tracking distinction from SlewToCoordinates"},
+	"SlewToTarget":           {Kind: binding.Func, Fn: "SlewToTarget", Why: "retained targets use the TRACK-mode slew sequence"},
 	"SlewToTargetAsync":      {Kind: binding.Func, Fn: "SlewToTargetAsync"},
 	"SlewToAltAz":            {Kind: binding.Func, Fn: "SlewToAltAz", Why: "HORIZONTAL_COORD write where IP_RW; gated by CanSlewAltAz"},
 	"SlewToAltAzAsync":       {Kind: binding.Func, Fn: "slewAltAzAsync"},
 	"SyncToCoordinates":      {Kind: binding.Func, Fn: "syncCoords", Why: "mode SYNC, then coordinates"},
 	"SyncToTarget":           {Kind: binding.Func, Fn: "SyncToTarget"},
 	"SyncToAltAz":            {Kind: binding.Absent, Why: "no INDI alt/az sync path; CanSyncAltAz is false"},
-	"Slewing":                {Kind: binding.Derived, Why: "EQUATORIAL_EOD_COORD/park/home Busy OR bridge in-flight (slew/park/home/axis) — never the manual-motion switches alone"},
+	"Slewing":                {Kind: binding.Derived, Why: "coordinate, park, or home Busy state, or a pending bridge motion command"},
 	"AbortSlew":              {Kind: binding.Mapped, Prop: "TELESCOPE_ABORT_MOTION", Elem: "ABORT"},
-	"DestinationSideOfPier":  {Kind: binding.Absent, Why: "needs the mount's own flip model; a wrong prediction flips clients at the wrong time — 0x400 lets them use their own geometry"},
+	"DestinationSideOfPier":  {Kind: binding.Absent, Why: "no mapping for the mount-specific meridian-flip model"},
 
 	"AtPark":  {Kind: binding.Derived, Why: "TELESCOPE_PARK.PARK On, vector not Busy, no unacknowledged park/unpark send"},
 	"Park":    {Kind: binding.Func, Fn: "park", Why: "PARK switch, non-blocking (ITelescopeV4 initiator; goalpaca server/telescope.go)"},
@@ -47,19 +46,18 @@ var table = binding.Table{
 	"GuideRateDeclination": {Kind: binding.Mapped, Prop: "GUIDE_RATE", Elem: "GUIDE_RATE_NS"},
 
 	"MoveAxis": {Kind: binding.Func, Fn: "MoveAxis",
-		Why: "TELESCOPE_MOTION_NS/_WE direction switches; rate magnitude selects nothing yet (INDI rates are discrete named switches); 0 stops via explicit Off"},
+		Why: "direction switches use the current INDI slew rate; zero sends explicit Off"},
 	"AxisRates":   {Kind: binding.Derived, Why: "one degenerate range per movable axis — INDI's TELESCOPE_SLEW_RATE is discrete and unit-less"},
 	"CanMoveAxis": {Kind: binding.Derived, Why: "presence of TELESCOPE_MOTION_NS/_WE per axis; tertiary always false"},
 
-	// GEOGRAPHIC_COORD and TIME_UTC are written complete, never one member: a
-	// partial write indexes values[-1] in INDI::Telescope and kills the child.
+	// GEOGRAPHIC_COORD and TIME_UTC require complete vectors; partial writes can crash libindi.
 	"SiteLatitude":  {Kind: binding.Func, Fn: "SetSiteLatitude", Prop: "GEOGRAPHIC_COORD", Elem: "LAT", Why: "complete-vector write"},
 	"SiteLongitude": {Kind: binding.Func, Fn: "SiteLongitude", Prop: "GEOGRAPHIC_COORD", Elem: "LONG", Why: "0–360°E ↔ ±180°; complete-vector write"},
 	"SiteElevation": {Kind: binding.Func, Fn: "SetSiteElevation", Prop: "GEOGRAPHIC_COORD", Elem: "ELEV", Why: "complete-vector write"},
-	"UTCDate":       {Kind: binding.Func, Fn: "UTCDate", Why: "TIME_UTC.UTC where defined, else the host clock; format conversion both ways; OFFSET always included in the write"},
+	"UTCDate":       {Kind: binding.Func, Fn: "UTCDate", Why: "TIME_UTC.UTC or the host clock; writes include OFFSET"},
 	"SiderealTime":  {Kind: binding.Synthesised, Why: "LST from site longitude + clock; INDI does not publish it"},
 
-	"AlignmentMode":    {Kind: binding.Derived, Why: "TELESCOPE_MOUNT_TYPE (ALTAZ/EQ_FORK/EQ_GEM); GermanPolar where undefined — the dominant real-world geometry"},
+	"AlignmentMode":    {Kind: binding.Derived, Why: "TELESCOPE_MOUNT_TYPE; defaults to GermanPolar when absent"},
 	"SideOfPier":       {Kind: binding.Derived, Why: "TELESCOPE_PIER_SIDE: EAST/WEST/neither → PierEast/PierWest/PierUnknown(-1), a direct three-value map"},
 	"ApertureDiameter": {Kind: binding.Func, Fn: "ApertureDiameter", Prop: "TELESCOPE_INFO", Elem: "TELESCOPE_APERTURE", Why: "mm → m"},
 	"ApertureArea":     {Kind: binding.Synthesised, Why: "πr² from ApertureDiameter"},
@@ -85,8 +83,7 @@ var table = binding.Table{
 	"CanSyncAltAz":             {Kind: binding.Derived, Why: "no INDI alt/az sync — false"},
 }
 
-// consumed is the table's Props plus the properties the sequenced Func members
-// write without naming them in a row.
+// consumed includes properties written by multi-step operations.
 var consumed = table.Consumed(
 	coordMode, parkProp, homeProp,
 	trackMode, trackRate, trackState,

@@ -10,14 +10,6 @@ import (
 	"github.com/mikefsq/goalpaca/server"
 )
 
-// A HOST THAT SERVES ALPACA ANNOUNCES IT, and there is no switch for the difference.
-//
-// Discovery follows the Alpaca face deliberately: serving devices and announcing nothing is not a
-// configuration anyone wants, and it is exactly what this used to do. serve.go passed
-// `server.Config{AlpacaPort: …}` with no Discovery, so every server took goalpaca's zero value —
-// DiscoveryRegister with an empty ServerAddr, which registers with nothing. Eight devices answered
-// `management/v1/configureddevices` on their own ports and NOTHING bound UDP 32227, so any client
-// that discovers rather than being told — NINA, Ekos, goastro's broadcast — found none of them.
 func TestAlpacaEnabledDecidesDiscovery(t *testing.T) {
 	on, off := true, false
 	for _, tc := range []struct {
@@ -37,14 +29,6 @@ func TestAlpacaEnabledDecidesDiscovery(t *testing.T) {
 	}
 }
 
-// ONE RESPONDER ANSWERS FOR EVERY PORT — the whole point of moving discovery off the servers.
-//
-// Per-server DiscoveryDirect answered a BROADCAST from all of them and a UNICAST from exactly one,
-// because that is what SO_REUSEPORT does. Measured against the real host before this changed: eight
-// replies to 255.255.255.255, one reply to 127.0.0.1. A client on the same machine saw a single
-// arbitrary device.
-//
-// The probe here is a UNICAST to loopback, deliberately — that is the case that used to fail.
 func TestOneResponderAnswersForEveryPort(t *testing.T) {
 	ports := []int{11211, 11212, 11213}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,9 +72,6 @@ func TestOneResponderAnswersForEveryPort(t *testing.T) {
 	}
 }
 
-// A HEARTBEAT IS NOT A PROBE. A Register-mode device pointed at this host must not be answered as
-// though it had asked where the devices are — it would get a burst of port replies it never
-// requested, and its registration would be dropped.
 func TestAHeartbeatIsNotAnsweredAsAProbe(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

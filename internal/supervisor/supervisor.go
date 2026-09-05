@@ -1,6 +1,4 @@
-// Package supervisor owns one driver child's lifecycle: the
-// Spawning→Acquiring→Serving→Retrying phase machine, capped backoff, snapshot
-// invalidation on death, and ordered shutdown.
+// Package supervisor manages INDI driver processes, reconnection, and property snapshots.
 package supervisor
 
 import (
@@ -58,12 +56,8 @@ type Config struct {
 	// PollingPeriodMs, when >0, is applied to each connected device on every acquire.
 	PollingPeriodMs int
 
-	// PresetsBeforeConnect and PresetsAfterConnect are `"PROP.MEMBER" → value`
-	// driver-property presets, applied when the property defines and re-applied
-	// on every respawn.
-	//
-	// Before-connect entries gate the CONNECT nudge: DEVICE_PORT-class settings
-	// must reach the driver before CONNECT does.
+	// PresetsBeforeConnect and PresetsAfterConnect set PROPERTY.MEMBER values
+	// on each acquisition. Before-connect presets must be applied before CONNECT.
 	PresetsBeforeConnect map[string]string
 	PresetsAfterConnect  map[string]string
 
@@ -76,17 +70,12 @@ type Config struct {
 	// RecordPath, when set, tees the session (transport recording).
 	RecordPath string
 
-	// OnBlob receives each BLOB member's payload on the read-loop goroutine.
-	//
-	// data is valid only for the call; the mmap is released on return. With no
-	// OnBlob and no SetOnBlob observer, payloads are discarded undecoded.
+	// OnBlob receives BLOB payloads on the read loop. Data is valid only during
+	// the call; payloads without consumers are discarded.
 	OnBlob func(device, prop, member string, data []byte, format string)
 
-	// OnElement observes every parsed driver element on the read-loop
-	// goroutine, before the snapshot is updated.
-	//
-	// The Element's storage is reused between calls: copy before returning,
-	// never queue the pointer.
+	// OnElement observes parsed elements on the read loop before snapshot updates.
+	// Copy retained data before returning; parser storage is reused.
 	OnElement func(el *indiwire.Element)
 
 	// OnServing runs on the read-loop goroutine each time Serving is entered.
@@ -151,10 +140,8 @@ func New(cfg Config, st *snapshot.Store) *Supervisor {
 // Config.OnElement for the reused-storage contract.
 func (s *Supervisor) SetOnElement(fn func(*indiwire.Element)) { s.onElement.Store(&fn) }
 
-// SetOnBlob installs the BLOB observer: every BLOB set element, with its
-// members' payloads keyed by member name (empty for a state-only set).
-//
-// Called on the read-loop goroutine; el and data are valid only for the call.
+// SetOnBlob observes BLOB sets with payloads keyed by member name.
+// It runs on the read loop; el and data are valid only during the call.
 func (s *Supervisor) SetOnBlob(fn func(el *indiwire.Element, data map[string][]byte)) {
 	s.onBlob.Store(&fn)
 }
@@ -171,11 +158,7 @@ func (s *Supervisor) Reason() string { return *s.reason.Load() }
 // Snapshot returns the current immutable view.
 func (s *Supervisor) Snapshot() *snapshot.Snapshot { return s.store.Current() }
 
-// LastDef reports when the child's most recent def element arrived, zero
-// before any.
-//
-// The def burst trails the Serving transition, so callers needing the settled
-// property set wait for a quiet period on this clock rather than a fixed sleep.
+// LastDef returns the latest property-definition time, or zero before any arrive.
 func (s *Supervisor) LastDef() time.Time {
 	ns := s.lastDef.Load()
 	if ns == 0 {

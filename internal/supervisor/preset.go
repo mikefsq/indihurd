@@ -8,9 +8,7 @@ import (
 	"github.com/mikefsq/indihurd/internal/indiwire"
 )
 
-// preset is one parsed `"PROP.MEMBER": "value"` config entry. The CONNECT
-// nudge is gated on the before-connect ones: DEVICE_PORT must reach the driver
-// before CONNECT does, or it opens the wrong port.
+// preset holds a PROPERTY.MEMBER value to apply before or after connection.
 type preset struct {
 	prop, member, value string
 	before              bool
@@ -51,8 +49,7 @@ func (s *Supervisor) presetsBeforeConnectDone() bool {
 	return true
 }
 
-// applyPresetDefs fires on defs so a preset waits for its property to exist
-// rather than racing the def burst.
+// applyPresetDefs applies presets when their properties are defined.
 func (s *Supervisor) applyPresetDefs(el *indiwire.Element) {
 	if el.Kind != indiwire.KindDef || len(s.presets) == 0 || !s.wantDevice(el.Device) {
 		return
@@ -64,8 +61,7 @@ func (s *Supervisor) applyPresetDefs(el *indiwire.Element) {
 	s.applyPresetsFor(el.Device, el.Name, el.Type, numbers, s.Phase() == PhaseServing)
 }
 
-// sweepPresets catches after-connect presets whose properties defined before
-// Serving, which the def hook saw too early.
+// sweepPresets applies after-connect presets whose definitions arrived before Serving.
 func (s *Supervisor) sweepPresets(device string) {
 	if len(s.presets) == 0 {
 		return

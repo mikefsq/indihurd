@@ -17,8 +17,6 @@ import (
 	"github.com/mikefsq/indihurd/internal/snapshot"
 )
 
-// TestTotality is the drift gate: every server.Camera member has exactly one
-// table entry, and no entry is stale.
 func TestTotality(t *testing.T) {
 	problems := binding.CheckTotal(reflect.TypeOf((*server.Camera)(nil)).Elem(), table)
 	for _, p := range problems {
@@ -203,8 +201,6 @@ func tinyFITS(w, h int) []byte {
 	return append([]byte(b.String()), data...)
 }
 
-// TestActionsWiring: SupportedActions is non-empty and does not leak the
-// properties the typed Gain/Offset mapping resolves dynamically.
 func TestActionsWiring(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	acts := fx.dev.SupportedActions()
@@ -221,8 +217,6 @@ func TestActionsWiring(t *testing.T) {
 	}
 }
 
-// TestGainDiscoveryControls guards the AutoExpMaxGain trap: exact lowercased
-// name/label matching over CCD_CONTROLS, never substring.
 func TestGainDiscoveryControls(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -249,7 +243,6 @@ func TestGainDiscoveryControls(t *testing.T) {
 	}
 }
 
-// TestGainStandalone: CCD_GAIN beats discovery when present.
 func TestGainStandalone(t *testing.T) {
 	fx := newFixture(t, simDefs+`
 <defNumberVector device='C' name='CCD_GAIN' state='Ok' perm='rw'>
@@ -266,7 +259,6 @@ func TestGainStandalone(t *testing.T) {
 	}
 }
 
-// TestGainAbsent: no resolvable source → 0x400, never Gain=0-as-a-value.
 func TestGainAbsent(t *testing.T) {
 	fx := newFixture(t, `
 <defNumberVector device='C' name='CCD_EXPOSURE' state='Ok' perm='rw'>
@@ -310,8 +302,6 @@ func TestSensorInfo(t *testing.T) {
 	}
 }
 
-// TestSubframeBinned: CCD_FRAME is unbinned, the ASCOM members binned; reads
-// correct at bin 1 is the signature of this bug class.
 func TestSubframeBinned(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -347,8 +337,6 @@ func TestSubframeBinned(t *testing.T) {
 	}
 }
 
-// TestExposureLifecycle drives the whole path: frame type, exposure, countdown,
-// blob, frame.
 func TestExposureLifecycle(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
@@ -531,8 +519,6 @@ func TestMonochromeNoCFA(t *testing.T) {
 	}
 }
 
-// TestDeadChild: 0x407 with the supervisor's reason; in-flight state fails
-// rather than holds.
 func TestDeadChild(t *testing.T) {
 	fx := newFixture(t, simDefs)
 	d := fx.dev
