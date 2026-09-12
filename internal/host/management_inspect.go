@@ -43,10 +43,6 @@ func (m *management) handleInspect(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var snap *snapshot.Snapshot
-	if err := m.webExecutableConflict(e.Exec); err != nil {
-		jsonReply(w, 422, map[string]string{"error": err.Error()})
-		return
-	}
 	for _, running := range m.active {
 		if sameExecutable(e.Exec, running.entry.Exec) {
 			jsonReply(w, 409, map[string]any{"error": "This executable is already managed by an enabled device. Use its Setup page or disable it before reading pre-connect settings."})

@@ -205,3 +205,68 @@ func parseOne(t *testing.T, s string) *indiwire.Element {
 	}
 	return el
 }
+
+// Selection applies to discovery, writes, live properties, and camera payloads.
+func TestSelectedChildrenFilterTraffic(t *testing.T) {
+	defs := func(device string) string {
+		return `<defTextVector device="` + device + `" name="INFO" perm="rw" state="Ok"><defText name="VALUE">ready</defText></defTextVector>`
+	}
+	selected := newFakeChild(t, defs("Selected"))
+	hidden := newFakeChild(t, defs("Hidden"))
+	srv := New("", nil, selected)
+	left, right := net.Pipe()
+	defer left.Close()
+	defer right.Close()
+	c := newConn(left, srv)
+	c.setPolicy("", "", blobAlso)
+	srv.conns[c] = struct{}{}
+	parse := func(raw string) *indiwire.Element {
+		el, err := indiwire.NewParser(strings.NewReader(raw)).Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return el
+	}
+	if got := srv.devices(); len(got) != 1 || got[0] != "Selected" {
+		t.Fatal(got)
+	}
+	srv.replay(c, "Hidden", "")
+	if len(c.out) != 0 {
+		t.Fatal("hidden snapshot replayed")
+	}
+	if err := srv.forward(context.Background(), parse(`<newTextVector device="Hidden" name="INFO"><oneText name="VALUE">changed</oneText></newTextVector>`)); err == nil {
+		t.Fatal("write routed to hidden device")
+	}
+	update := parse(`<setTextVector device="Hidden" name="INFO"><oneText name="VALUE">changed</oneText></setTextVector>`)
+	srv.PublishFrom(hidden, update)
+	blob := parse(`<setBLOBVector device="Hidden" name="CCD1"><oneBLOB name="CCD1" size="3" format=".fits">YWJj</oneBLOB></setBLOBVector>`)
+	srv.PublishBlobFrom(hidden, blob, map[string][]byte{"CCD1": []byte("abc")})
+	if len(c.out) != 0 {
+		t.Fatal("hidden live traffic leaked")
+	}
+	update.Device = "Selected"
+	srv.PublishFrom(selected, update)
+	if len(c.out) != 1 {
+		t.Fatal("selected update missing")
+	}
+	<-c.out
+	blob.Device = "Selected"
+	srv.PublishBlobFrom(selected, blob, map[string][]byte{"CCD1": []byte("abc")})
+	if len(c.out) != 1 {
+		t.Fatal("selected BLOB missing")
+	}
+	<-c.out
+	// Reusing a selection keeps clients; changing it clears their cached view.
+	srv.SetChildren([]Child{selected})
+	select {
+	case <-c.done:
+		t.Fatal("unchanged selection disconnected client")
+	default:
+	}
+	srv.SetChildren([]Child{hidden})
+	select {
+	case <-c.done:
+	default:
+		t.Fatal("changed selection kept stale client")
+	}
+}

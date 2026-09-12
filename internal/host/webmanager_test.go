@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ import (
 
 func wmRequest(t *testing.T, m *management, method, path, body string, code int) *httptest.ResponseRecorder {
 	t.Helper()
-	r := httptest.NewRequest(method, "/api/"+path, strings.NewReader(body))
+	r := httptest.NewRequest(method, "/setup/api/"+path, strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	m.ServeHTTP(w, r)
@@ -29,7 +30,8 @@ func wmRequest(t *testing.T, m *management, method, path, body string, code int)
 }
 func TestWebManagerProfiles(t *testing.T) {
 	m := webFixture(t, `{"devices":[]}`)
-	m.wm.catalog = func() []webDriver { return []webDriver{{Label: "Mount", Binary: "indi_mount"}} }
+	m.config.IndiPort = 7625
+	m.config.Devices = []Entry{{Name: "Mount", Exec: "indi_mount"}}
 	wmRequest(t, m, "POST", "profiles/My%20Profile", "", 200)
 	wmRequest(t, m, "PUT", "profiles/My%20Profile", `{"port":7625,"autoconnect":1}`, 200)
 	wmRequest(t, m, "POST", "profiles/My%20Profile/drivers", `[{"label":"Mount"}]`, 200)
@@ -60,95 +62,21 @@ func TestWebManagerProfiles(t *testing.T) {
 	wmRequest(t, m, "DELETE", "profiles/My%20Profile", "", 200)
 	wmRequest(t, m, "GET", "profiles/My%20Profile", "", 404)
 }
-func TestWebManagerNativeLifecycle(t *testing.T) {
-	dir := t.TempDir()
-	exe := filepath.Join(dir, "indi_fixture")
-	script := `#!/bin/sh
-printf '%s\n' '<defSwitchVector device="Mount" name="CONNECTION" perm="rw" state="Idle" rule="OneOfMany"><defSwitch name="CONNECT">Off</defSwitch><defSwitch name="DISCONNECT">On</defSwitch></defSwitchVector>'
-while IFS= read -r line; do
-case "$line" in
-*newSwitchVector*) printf '%s\n' '<setSwitchVector device="Mount" name="CONNECTION" state="Ok"><oneSwitch name="CONNECT">On</oneSwitch><oneSwitch name="DISCONNECT">Off</oneSwitch></setSwitchVector>';;
-esac
-done
-`
-	if err := os.WriteFile(exe, []byte(script), 0700); err != nil {
-		t.Fatal(err)
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+func TestWebManagerConfiguredCatalog(t *testing.T) {
 	m := webFixture(t, `{"devices":[]}`)
-	m.wm.catalog = func() []webDriver { return []webDriver{{Label: "Test Mount", Binary: exe}} }
-	wmRequest(t, m, "POST", "profiles/Test", "", 200)
-	wmRequest(t, m, "PUT", "profiles/Test", fmt.Sprintf(`{"port":%d,"autoconnect":0}`, port), 200)
-	wmRequest(t, m, "POST", "profiles/Test/drivers", `[{"label":"Test Mount"}]`, 200)
-	wmRequest(t, m, "POST", "server/start/Test", "", 200)
-	w := wmRequest(t, m, "GET", "server/drivers", "", 200)
+	m.config.Devices = []Entry{{Name: "Mount", Exec: "/usr/bin/indi_mount"}, {Name: "Camera", Exec: "/usr/bin/indi_camera"}}
+	m.wm.store.Custom = []webDriver{{Label: "Unconfigured alias", Binary: "/usr/bin/indi_mount"}}
+	w := wmRequest(t, m, "GET", "drivers", "", 200)
 	var ds []webDriver
-	if json.Unmarshal(w.Body.Bytes(), &ds) != nil || len(ds) != 1 || ds[0].Binary != filepath.Base(exe) {
+	if err := json.Unmarshal(w.Body.Bytes(), &ds); err != nil {
+		t.Fatal(err)
+	}
+	if len(ds) != 2 || ds[0].Label != "Camera" || ds[1].Label != "Mount" {
 		t.Fatal(w.Body.String())
 	}
-	runtime := m.wm.running["Test Mount"]
-	snap := runtime.sup.Snapshot()
-	v, _ := snap.Vector("Mount", "CONNECTION")
-	member, _ := v.Member("CONNECT")
-	if member.On {
-		t.Fatal("autoconnect false connected hardware")
-	}
-	// A disconnected profile must still accept an INDI client's connection request.
-	c, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	fmt.Fprintln(c, `<getProperties version="1.7"/>`)
-	fmt.Fprintln(c, `<newSwitchVector device="Mount" name="CONNECTION"><oneSwitch name="CONNECT">On</oneSwitch><oneSwitch name="DISCONNECT">Off</oneSwitch></newSwitchVector>`)
-	deadline := time.Now().Add(2 * time.Second)
-	connected := false
-	for time.Now().Before(deadline) {
-		v, _ = runtime.sup.Snapshot().Vector("Mount", "CONNECTION")
-		member, _ = v.Member("CONNECT")
-		if member.On {
-			connected = true
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !connected {
-		t.Fatal("native connection command did not reach disconnected driver")
-	}
-	if m.webExecutableConflict(exe) == nil {
-		t.Fatal("missing device conflict")
-	}
-	wmRequest(t, m, "DELETE", "profiles/Test", "", 409)
-	wmRequest(t, m, "POST", "drivers/restart/Test%20Mount", "", 200)
-	if m.wm.running["Test Mount"] == runtime {
-		t.Fatal("restart reused process")
-	}
-	wmRequest(t, m, "POST", "server/stop", "", 200)
-	select {
-	case <-runtime.done:
-	case <-time.After(time.Second):
-		t.Fatal("child not reaped")
-	}
-	if strings.Contains(wmRequest(t, m, "GET", "server/status", "", 200).Body.String(), `"True"`) {
-		t.Fatal("stopped server reports running")
-	}
+	wmRequest(t, m, "POST", "profiles/custom/add", `{"label":"Alias","exec":"indi_mount"}`, 409)
 }
-func TestWebManagerCatalog(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("INDI_DATA_DIR", dir)
-	t.Setenv("PATH", dir)
-	os.WriteFile(filepath.Join(dir, "indi_mount"), []byte("#!/bin/sh\n"), 0700)
-	os.WriteFile(filepath.Join(dir, "drivers.xml"), []byte(`<driversList><devGroup group="Telescopes"><device label="LX200 10micron"><driver name="10micron">indi_mount</driver><version>1</version></device><device label="Missing"><driver name="Missing">indi_missing</driver></device></devGroup></driversList>`), 0600)
-	ds := installedWebDrivers()
-	if len(ds) != 1 || ds[0].Label != "LX200 10micron" {
-		t.Fatalf("%+v", ds)
-	}
-}
+
 func TestWebManagerCorruptStorePreserved(t *testing.T) {
 	m := webFixture(t, `{"devices":[]}`)
 	os.WriteFile(m.webStorePath(), []byte("bad json"), 0600)
@@ -177,9 +105,6 @@ while IFS= read -r line; do :; done
 	ln.Close()
 	raw := fmt.Sprintf(`{"alpaca":false,"indiPort":%d,"devices":[{"name":"Mount","driver":"indi-telescope","exec":%q,"device":0}]}`, port, exe)
 	m := webFixture(t, raw)
-	m.wm.catalog = func() []webDriver {
-		return []webDriver{{Name: "10micron", Label: "LX200 10micron", Binary: "indi_lx200_10micron"}}
-	}
 	m.startINDI()
 	m.start(m.config.Devices[0])
 	m.syncRoutes()
@@ -203,12 +128,97 @@ while IFS= read -r line; do :; done
 	if err := json.Unmarshal(w.Body.Bytes(), &ds); err != nil {
 		t.Fatal(err)
 	}
-	if len(ds) != 1 || ds[0].Binary != "indi_lx200_10micron" || ds[0].Label != "LX200 10micron" {
+	if len(ds) != 1 || ds[0].Binary != "indi_lx200_10micron" || ds[0].Label != "Mount" {
 		t.Fatal(w.Body.String())
 	}
 	if w = wmRequest(t, m, "GET", "devices", "", 200); !strings.Contains(w.Body.String(), "10micron") {
 		t.Fatal(w.Body.String())
 	}
+	// Selecting profiles persists enable flags and reconciles managed children.
+	disabled := false
+	spare := m.config.Devices[0]
+	spare.Name = "Spare"
+	spare.Enable = &disabled
+	m.config.Devices = append(m.config.Devices, spare)
+	wmRequest(t, m, "POST", "profiles/SpareOnly", "", 200)
+	wmRequest(t, m, "POST", "profiles/SpareOnly/drivers", `[{"label":"Spare"}]`, 200)
+	wmRequest(t, m, "POST", "profiles/MountOnly", "", 200)
+	wmRequest(t, m, "POST", "profiles/MountOnly/drivers", `[{"label":"Mount"}]`, 200)
+	original := m.active["Mount"]
+	// Main-page selection posts the revision, then redirects on success.
+	form := url.Values{"profile": {"SpareOnly"}, "revision": {m.revision}}
+	req := httptest.NewRequest("POST", "/setup/profile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	m.ServeHTTP(rec, req)
+	if rec.Code != 303 {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	if m.active["Mount"] != nil || m.active["Spare"] == nil {
+		t.Fatal("profile did not reconcile children")
+	}
+	select {
+	case <-original.done:
+	default:
+		t.Fatal("unselected child not stopped")
+	}
+	loaded, err := Load(m.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Devices[0].Enabled() || !loaded.Devices[1].Enabled() {
+		t.Fatal("enable flags were not saved")
+	}
+	if len(m.indi.Children()) != 1 || m.indi.Children()[0] != m.active["Spare"].built.Sup {
+		t.Fatal("wrong INDI route")
+	}
+	// Applying the same profile must keep its process.
+	retained := m.active["Spare"]
+	wmRequest(t, m, "POST", "server/start/SpareOnly", "", 200)
+	if m.active["Spare"] != retained {
+		t.Fatal("unchanged device restarted")
+	}
+	// Invalid settings are rejected before changing the file or working child.
+	before, _ := os.ReadFile(m.path)
+	savedExec := m.config.Devices[0].Exec
+	m.config.Devices[0].Exec = "/missing/indi_driver"
+	wmRequest(t, m, "POST", "server/start/MountOnly", "", 409)
+	after, _ := os.ReadFile(m.path)
+	if string(before) != string(after) || m.active["Spare"] != retained {
+		t.Fatal("invalid profile changed working configuration")
+	}
+	m.config.Devices[0].Exec = savedExec
+	wmRequest(t, m, "POST", "server/start/MountOnly", "", 200)
+	if m.active["Spare"] != nil || m.active["Mount"] == nil {
+		t.Fatal("second profile not applied")
+	}
+	mount := m.active["Mount"]
+	if err := m.startWebProfile(webProfile{Name: "Legacy", Port: port, Drivers: []webSelection{{Label: "LX200 10micron"}}}); err == nil {
+		t.Fatal("legacy label accepted")
+	}
+	if m.wm.active != "MountOnly" {
+		t.Fatal("invalid profile replaced active profile")
+	}
+	// The dropdown is present and reflects matching saved enable flags.
+	page := httptest.NewRecorder()
+	m.ServeHTTP(page, httptest.NewRequest("GET", "/setup", nil))
+	if !strings.Contains(page.Body.String(), `id="active-profile"`) || !strings.Contains(page.Body.String(), `value="MountOnly" selected`) {
+		t.Fatal(page.Body.String())
+	}
+	// Manual changes clear the profile label; they are not hidden by a filter.
+	if err := m.mutate("Mount", "disable"); err != nil {
+		t.Fatal(err)
+	}
+	if m.wm.active != "" || len(m.indi.Children()) != 0 {
+		t.Fatal("manual edit retained stale profile")
+	}
+	wmRequest(t, m, "POST", "server/start/MountOnly", "", 200)
+	mount = m.active["Mount"]
+	wmRequest(t, m, "POST", "server/stop", "", 200)
+	if m.active["Mount"] != mount || !m.config.Devices[0].Enabled() {
+		t.Fatal("clearing profile changed flags")
+	}
+
 	// Alpaca-only drivers must not be advertised as available through INDI.
 	listener := m.indi
 	m.indi = nil

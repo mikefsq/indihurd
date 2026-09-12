@@ -29,7 +29,10 @@ var webManagerJS string
 var managementTemplate = template.Must(template.New("management").Parse(managementHTML))
 
 type pageData struct {
+	Profiles                                                         []webProfile
+	ActiveProfile                                                    string
 	Mode, IndiPort, IndiListen                                       string
+	CanStopAll                                                       bool
 	SettingsBlocked                                                  bool
 	Executables                                                      []string
 	Page, Title, Error, Notice, Name, Draft, Revision, Path, Version string
@@ -37,6 +40,24 @@ type pageData struct {
 	Drivers                                                          []string
 	Properties                                                       []propertyView
 	Names                                                            []string
+}
+
+// Caller holds m.mu so profile selection and device rows describe one state.
+func (m *management) homePage() pageData {
+	active := m.wm.active
+	if active == "" {
+		for _, p := range m.wm.store.Profiles {
+			selected := map[string]bool{}
+			for _, d := range p.Drivers {
+				selected[d.Label] = true
+			}
+			if len(selected) > 0 && m.profileMatches(selected) {
+				active = p.Name
+				break
+			}
+		}
+	}
+	return pageData{Page: "home", Rows: m.rows(), Error: m.problem, Profiles: m.wm.store.Profiles, ActiveProfile: active, Revision: m.revision}
 }
 
 func (m *management) render(w http.ResponseWriter, p pageData) {
@@ -55,7 +76,7 @@ func jsonReply(w http.ResponseWriter, status int, v any) {
 }
 func (m *management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if strings.HasPrefix(r.URL.Path, "/api/") {
+	if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/setup/api/") {
 		m.serveWebManager(w, r)
 		return
 	}
@@ -92,15 +113,45 @@ func (m *management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.render(w, pageData{Page: "profiles", Title: "INDI profiles"})
 	case "/setup":
 		m.mu.Lock()
-		p := pageData{Page: "home", Rows: m.rows(), Error: m.problem, Notice: r.URL.Query().Get("notice")}
+		p := m.homePage()
+		p.Notice = r.URL.Query().Get("notice")
 		m.mu.Unlock()
 		m.render(w, p)
 	case "/setup/status":
 		m.mu.Lock()
 		rows := m.rows()
 		problem := m.problem
+		home := m.homePage()
 		m.mu.Unlock()
-		jsonReply(w, 200, map[string]any{"rows": rows, "error": problem})
+		jsonReply(w, 200, map[string]any{"rows": rows, "error": problem, "profile": home.ActiveProfile, "revision": home.Revision})
+	case "/setup/profile":
+		if r.Method != http.MethodPost {
+			http.Error(w, "Use POST", 405)
+			return
+		}
+		m.mu.Lock()
+		var err error
+		name := r.PostForm.Get("profile")
+		if r.PostForm.Get("revision") != m.revision {
+			err = fmt.Errorf("configuration changed; refresh the page before selecting a profile")
+		} else {
+			err = fmt.Errorf("unknown profile %q", name)
+			for _, profile := range m.wm.store.Profiles {
+				if profile.Name == name {
+					err = m.startWebProfile(profile)
+					break
+				}
+			}
+		}
+		p := m.homePage()
+		m.mu.Unlock()
+		if err != nil {
+			p.Error = err.Error()
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			m.render(w, p)
+			return
+		}
+		http.Redirect(w, r, "/setup?notice="+url.QueryEscape("Profile "+name+" applied. Device enable flags saved."), http.StatusSeeOther)
 	case "/setup/action":
 		if r.Method != http.MethodPost {
 			http.Error(w, "Use POST", 405)
@@ -108,7 +159,7 @@ func (m *management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		m.mu.Lock()
 		err := m.mutate(r.PostForm.Get("name"), r.PostForm.Get("action"))
-		p := pageData{Page: "home", Rows: m.rows()}
+		p := m.homePage()
 		m.mu.Unlock()
 		if err != nil {
 			p.Error = err.Error()

@@ -4,7 +4,9 @@
 <header><h1>{{.Title}}</h1><nav><a href="/setup">Devices</a><a href="/setup/profiles">INDI profiles</a><a href="/setup/logs" target="_blank" rel="noopener">Logs ↗</a><a href="/setup/config">Configuration</a><a href="/setup/add">Add device</a>{{if eq .Page "home"}}<button id="refresh" class="link">Refresh status</button>{{end}}</nav></header>
 {{if .Error}}<p class="notice error" role="alert">{{.Error}}</p>{{end}}{{if .Notice}}<p class="notice ok" role="status">{{.Notice}}</p>{{end}}
 {{if eq .Page "home"}}
-<div class="list-heading"><h2>Devices</h2><label>Show <select id="state-filter"><option value="all">All states</option><option value="enabled">Enabled only</option><option value="disabled">Disabled only</option></select></label></div>
+<div class="list-heading"><h2>Devices</h2>
+<form id="profile-selection" method="post" action="/setup/profile"><input type="hidden" name="revision" value="{{.Revision}}"><label for="active-profile">Profile</label><select id="active-profile" name="profile" aria-describedby="profile-help" {{if not .Profiles}}disabled{{end}}><option value="" disabled {{if not .ActiveProfile}}selected{{end}}>Custom selection</option>{{range .Profiles}}<option value="{{.Name}}" {{if eq .Name $.ActiveProfile}}selected{{end}}>{{.Name}}</option>{{end}}</select><noscript><button>Apply profile</button></noscript></form><label>Show <select id="state-filter"><option value="all">All states</option><option value="enabled">Enabled only</option><option value="disabled">Disabled only</option></select></label></div>
+<p id="profile-help" class="muted">Selecting a profile saves its devices as enabled and disables the others. Devices outside the profile will stop. <a href="/setup/profiles">Manage profiles</a></p>
 <div id="devices" class="devices">
 {{range .Rows}}<article class="device" data-name="{{.Name}}" data-enabled="{{.Enabled}}">
 <div class="identity"><a href="/setup/properties?name={{.Name}}">{{.Name}}</a><span class="port">{{.Port}}</span></div>
@@ -15,25 +17,25 @@
 </div><p id="status-note" class="muted" role="status"></p><noscript><p>Use the Devices link to refresh status.</p></noscript>
 {{else if eq .Page "profiles"}}
 <script src="/setup/webmanager.js" defer></script>
-<p>Profiles launch native INDI drivers for Ekos. They do not change Alpaca mappings. Disable a configured device before using its driver in a profile.</p>
+<p>Profiles select which configured devices are enabled. Applying a profile saves the enable flags, starts selected devices, and stops the others. Connection settings remain on the Devices page.</p>
 <p id="wm-status" role="status">Loading profiles…</p><p id="wm-error" class="notice error" role="alert" hidden></p>
 <label for="wm-profile">Profile</label><select id="wm-profile"><option value="">New profile</option></select>
 <form id="wm-form"><label for="wm-name">Name</label><input id="wm-name" type="text" required maxlength="200" pattern="[^/]+">
-<label for="wm-port">INDI port</label><input id="wm-port" type="number" required min="1" max="65535" value="7624">
-<label><input type="checkbox" id="wm-autoconnect"> Connect hardware automatically</label><label><input type="checkbox" id="wm-autostart"> Start this profile when indihurd starts</label>
-<fieldset class="property"><legend>Installed drivers</legend><label for="wm-filter">Filter drivers</label><input id="wm-filter" type="text"><div id="wm-drivers"></div></fieldset>
-<div class="buttons"><button type="submit">Save profile</button><button type="button" id="wm-start">Start saved profile</button><button type="button" id="wm-stop">Stop profile</button><button type="button" id="wm-delete">Delete profile</button><button type="button" id="wm-refresh">Refresh status</button></div></form>
-<p class="muted">Ekos Web Manager uses HTTP port 8624. INDI clients use the profile’s INDI port. If that port is shared with Configuration, its listen address must allow network clients (0.0.0.0). Profile scripts and remote driver chaining are not supported.</p>
+<label for="wm-port">INDI port</label><input id="wm-port" type="number" readonly required min="1" max="65535" value="7624">
+<label><input type="checkbox" id="wm-autostart"> Select this profile when indihurd starts</label>
+<fieldset class="property"><legend>Configured devices</legend><label for="wm-filter">Filter devices</label><input id="wm-filter" type="text"><div id="wm-drivers"></div></fieldset>
+<div class="buttons"><button type="submit">Save profile</button><button type="button" id="wm-start">Apply saved profile</button><button type="button" id="wm-stop">Clear profile label</button><button type="button" id="wm-delete">Delete profile</button><button type="button" id="wm-refresh">Refresh status</button></div></form>
+<p class="muted">Profiles use the INDI port and listen address from Configuration. Applying a profile enables selected devices and disables all others. Clearing its label keeps the current enable flags. Legacy profiles using catalog labels must be updated to configured device names.</p>
 <noscript><p>Profile management requires JavaScript. Ekos can also manage these profiles directly.</p></noscript>
 {{else if eq .Page "settings"}}
-<p>Choose how indihurd serves its devices. Disable all devices before changing these settings.</p>
+<p>Choose how indihurd serves its devices. Stop all devices before changing the serving mode or INDI listener. This saves all devices as disabled; reapply a profile or enable devices after saving the new mode.</p>
 <form id="settings-form" method="post" action="/setup/config">
 <input type="hidden" name="revision" value="{{.Revision}}">
 <label for="serving-mode">Serving mode</label><select id="serving-mode" name="mode"><option value="indi" {{if eq .Mode "indi"}}selected{{end}}>INDI only</option><option value="alpaca" {{if eq .Mode "alpaca"}}selected{{end}}>Alpaca only</option><option value="both" {{if eq .Mode "both"}}selected{{end}}>INDI and Alpaca</option></select>
 <div id="indi-settings"><label for="indi-port">INDI port</label><input id="indi-port" name="indiPort" type="number" min="1" max="65535" step="1" required value="{{.IndiPort}}">
 <label for="indi-listen">INDI listen address</label><input id="indi-listen" name="indiListen" type="text" value="{{.IndiListen}}" placeholder="127.0.0.1" aria-describedby="listen-help"><p id="listen-help" class="muted">127.0.0.1 allows clients on this computer. Use 0.0.0.0 to allow network clients. Blank uses 127.0.0.1.</p></div>
 <p class="muted">Alpaca ports are configured per device. The web management address is set when indihurd starts (default port 8624).</p>
-<p id="settings-validation" role="status"></p><div class="buttons"><button id="settings-check" type="button" {{if .SettingsBlocked}}disabled{{end}}>Check configuration</button><button id="settings-save" {{if .SettingsBlocked}}disabled{{end}}>Save</button><a href="/setup">Cancel</a></div>
+<p id="settings-validation" role="status"></p><div class="buttons"><button type="submit" name="action" value="stop-all" formnovalidate {{if not .CanStopAll}}disabled{{end}}>Stop all devices</button><button id="settings-check" type="button" {{if .SettingsBlocked}}disabled{{end}}>Check configuration</button><button id="settings-save" {{if .SettingsBlocked}}disabled{{end}}>Save</button><a href="/setup">Cancel</a></div>
 </form><p><a href="/setup/config/raw">Advanced JSON / recovery editor</a></p>
 {{else if or (eq .Page "editor") (eq .Page "add") (eq .Page "config")}}
 {{if ne .Page "add"}}<p>Strict JSON. Check configuration before saving. Changes to a running device take effect after Restart.</p>{{end}}

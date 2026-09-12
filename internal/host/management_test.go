@@ -309,3 +309,59 @@ func TestPortUniquenessWithDisabledDevices(t *testing.T) {
 		t.Fatal("unset disabled ports should be allowed", err)
 	}
 }
+
+func TestSettingsStopAllPreservesDraftAndAllowsModeChange(t *testing.T) {
+	m := webFixture(t, `{"indiPort":7624,"devices":[{"name":"Mount","driver":"indi-telescope","exec":"missing","port":11216,"device":0},{"name":"Camera","driver":"indi-camera","exec":"missing","port":11217,"device":0}]}`)
+	stopped := 0
+	for _, e := range m.config.Devices {
+		done := make(chan struct{})
+		m.active[e.Name] = &runtimeEntry{entry: e, done: done, cancel: func() { stopped++; close(done) }}
+	}
+	page := webRequest(m, "/setup/config", nil).Body.String()
+	if !strings.Contains(page, "Stop all devices") {
+		t.Fatal("stop-all button missing")
+	}
+	form := url.Values{"action": {"stop-all"}, "revision": {"stale"}, "mode": {"alpaca"}, "indiPort": {""}, "indiListen": {"127.0.0.1"}}
+	before, _ := os.ReadFile(m.path)
+	webRequest(m, "/setup/config", form)
+	after, _ := os.ReadFile(m.path)
+	if stopped != 0 || string(before) != string(after) {
+		t.Fatal("stale request changed configuration")
+	}
+	form.Set("revision", m.revision)
+	w := webRequest(m, "/setup/config", form)
+	if w.Code != 303 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if stopped != 2 || len(m.active) != 0 {
+		t.Fatal("devices not stopped")
+	}
+	f, err := Load(m.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range f.Devices {
+		if e.Enabled() {
+			t.Fatal("enabled flag not saved")
+		}
+	}
+	if f.IndiPort != 7624 || !f.AlpacaEnabled() {
+		t.Fatal("stop-all applied pending mode")
+	}
+	location := w.Header().Get("Location")
+	draft := webRequest(m, location, nil).Body.String()
+	if !strings.Contains(draft, `value="alpaca" selected`) || !strings.Contains(draft, "All devices stopped") {
+		t.Fatal(draft)
+	}
+	form.Del("action")
+	form.Set("revision", m.revision)
+	if w = webRequest(m, "/setup/settings/check", form); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if w = webRequest(m, "/setup/config", form); w.Code != 303 {
+		t.Fatal(w.Body.String())
+	}
+	if m.config.IndiPort != 0 || !m.config.AlpacaEnabled() {
+		t.Fatal("new mode not applied")
+	}
+}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/mikefsq/goalpaca/server"
 	"github.com/mikefsq/indihurd/internal/indiserve"
+	"github.com/mikefsq/indihurd/internal/indiwire"
 	"github.com/mikefsq/indihurd/internal/supervisor"
 )
 
@@ -104,8 +105,9 @@ func (m *management) start(e Entry) {
 	}
 	r.built = b
 	if m.indi != nil {
-		b.Sup.SetOnElement(m.indi.Publish)
-		b.Sup.SetOnBlob(m.indi.PublishBlob)
+		s := m.indi
+		b.Sup.SetOnElement(func(el *indiwire.Element) { s.PublishFrom(b.Sup, el) })
+		b.Sup.SetOnBlob(func(el *indiwire.Element, blobs map[string][]byte) { s.PublishBlobFrom(b.Sup, el, blobs) })
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	r.cancel = cancel
@@ -160,11 +162,6 @@ func (m *management) syncRoutes() {
 	}
 	if m.discovery != nil {
 		m.discovery.SetPorts(ports)
-	}
-	if m.wm != nil && m.wm.server == m.indi {
-		for _, d := range m.wm.running {
-			children = append(children, d.sup)
-		}
 	}
 	if m.indi != nil {
 		m.indi.SetChildren(children)
@@ -254,9 +251,6 @@ func (m *management) validate(raw []byte) (*File, error) {
 		if !e.Enabled() {
 			continue
 		}
-		if err := m.webExecutableConflict(e.Exec); err != nil {
-			return nil, err
-		}
 		for _, session := range m.inspections {
 			if sameExecutable(e.Exec, session.entry.Exec) {
 				return nil, fmt.Errorf("%s: close its configuration session before enabling", e.Name)
@@ -303,9 +297,6 @@ func atomicConfig(path string, raw []byte) error {
 // Save changes desired configuration. Running, changed entries stay pending
 // until Restart; enabled/disabled transitions apply immediately.
 func (m *management) save(raw []byte, expected string) error {
-	if m.wm != nil && m.wm.active != "" {
-		return fmt.Errorf("stop the Web Manager profile before changing device configuration")
-	}
 	current, err := os.ReadFile(m.path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -351,6 +342,7 @@ func (m *management) save(raw []byte, expected string) error {
 		}
 	}
 	if old.IndiPort != f.IndiPort || old.IndiListen != f.IndiListen {
+		m.stopWebProfile()
 		if m.indiCancel != nil {
 			m.indiCancel()
 			<-m.indiDone
@@ -363,6 +355,10 @@ func (m *management) save(raw []byte, expected string) error {
 		if e.Enabled() && m.active[e.Name] == nil {
 			m.start(e)
 		}
+	}
+	if m.wm != nil && m.wm.active != "" && !m.profileMatches(m.wm.selected) {
+		m.wm.active = ""
+		m.wm.selected = nil
 	}
 	m.syncRoutes()
 	return nil

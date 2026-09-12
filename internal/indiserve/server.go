@@ -41,12 +41,27 @@ func New(addr string, logf func(string, ...any), children ...Child) *Server {
 	return &Server{addr: addr, children: children, logf: logf, conns: map[*conn]struct{}{}, dupWarned: map[string]bool{}}
 }
 
-// SetChildren updates routing without disconnecting unrelated INDI clients.
+// SetChildren updates routing. A changed device set disconnects existing clients
+// so their cached devices and queued events cannot outlive the selection.
 func (s *Server) SetChildren(children []Child) {
 	s.childrenMu.Lock()
+	defer s.childrenMu.Unlock()
+	same := len(children) == len(s.children)
+	if same {
+		for i := range children {
+			if children[i] != s.children[i] {
+				same = false
+				break
+			}
+		}
+	}
+	if same {
+		return
+	}
 	s.children = append([]Child(nil), children...)
-	s.childrenMu.Unlock()
+	s.closeAll()
 }
+
 func (s *Server) Children() []Child {
 	s.childrenMu.RLock()
 	defer s.childrenMu.RUnlock()
@@ -116,6 +131,28 @@ func (s *Server) drop(c *conn) {
 func (s *Server) dropf(c *conn, format string, args ...any) {
 	s.logf("indiserve: client %s dropped: %v", c.nc.RemoteAddr(), fmt.Sprintf(format, args...))
 	s.drop(c)
+}
+
+// PublishFrom only forwards events from children currently exposed by this server.
+func (s *Server) PublishFrom(child Child, el *indiwire.Element) {
+	s.childrenMu.RLock()
+	defer s.childrenMu.RUnlock()
+	for _, c := range s.children {
+		if c == child {
+			s.Publish(el)
+			return
+		}
+	}
+}
+func (s *Server) PublishBlobFrom(child Child, el *indiwire.Element, blobs map[string][]byte) {
+	s.childrenMu.RLock()
+	defer s.childrenMu.RUnlock()
+	for _, c := range s.children {
+		if c == child {
+			s.PublishBlob(el, blobs)
+			return
+		}
+	}
 }
 
 // Publish fans one driver element out to every interested client, serialising

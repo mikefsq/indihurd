@@ -84,10 +84,6 @@ func (m *management) handleInspectionSession(w http.ResponseWriter, r *http.Requ
 			fail(fmt.Errorf("enter a valid device draft and executable"))
 			return
 		}
-		if err := m.webExecutableConflict(e.Exec); err != nil {
-			jsonReply(w, 422, map[string]string{"error": err.Error()})
-			return
-		}
 		for _, running := range m.active {
 			if sameExecutable(e.Exec, running.entry.Exec) {
 				fail(fmt.Errorf("disable this executable before opening its configuration session"))

@@ -1,5 +1,8 @@
 'use strict';
 (() => {
+ const profileForm=document.getElementById('profile-selection'),profileSelect=document.getElementById('active-profile');
+ let applyingProfile=false;
+ if(profileForm){profileSelect.addEventListener('change',()=>{if(!applyingProfile)profileForm.requestSubmit();});profileForm.addEventListener('submit',()=>{applyingProfile=true;profileSelect.setAttribute('aria-busy','true');});}
  const settings=document.getElementById('settings-form');
  if(settings){
   const mode=settings.elements.mode,port=settings.elements.indiPort,fields=document.getElementById('indi-settings'),check=document.getElementById('settings-check'),save=document.getElementById('settings-save'),status=document.getElementById('settings-validation');
@@ -7,7 +10,7 @@
   function changed(){generation++;fields.hidden=mode.value==='alpaca';port.required=!fields.hidden;port.disabled=fields.hidden;save.disabled=true;check.disabled=blocked;status.textContent='';}
   settings.addEventListener('input',changed);changed();
   check.addEventListener('click',async()=>{if(!settings.reportValidity())return;const current=generation;check.disabled=true;status.textContent='Checking configuration…';try{const response=await fetch('/setup/settings/check',{method:'POST',body:new URLSearchParams(new FormData(settings))});const result=await response.json();if(current!==generation)return;save.disabled=!result.valid;status.textContent=result.error||result.message;status.className=result.valid?'ok':'error';}catch(_){if(current===generation){status.textContent='Check failed. Your changes are preserved.';status.className='error';}}finally{if(current===generation)check.disabled=blocked;}});
-  settings.addEventListener('submit',event=>{if(save.disabled)event.preventDefault();});
+  settings.addEventListener('submit',event=>{if(event.submitter?.value==='stop-all')return;if(save.disabled)event.preventDefault();});
  }
  const editor=document.getElementById('config-editor');
  if(editor){
@@ -148,7 +151,7 @@
   const filter=document.getElementById('state-filter'),refresh=document.getElementById('refresh'),note=document.getElementById('status-note');let busy=false;
   function apply(){for(const row of devices.querySelectorAll('[data-name]'))row.hidden=filter.value!=='all'&&row.dataset.enabled!==String(filter.value==='enabled');try{sessionStorage.setItem('indihurd-filter',filter.value)}catch(_){}}
   try{const saved=sessionStorage.getItem('indihurd-filter');if(['all','enabled','disabled'].includes(saved))filter.value=saved}catch(_){}filter.addEventListener('change',apply);apply();
-  async function update(){if(busy||document.hidden)return;busy=true;refresh.disabled=true;try{const response=await fetch('/setup/status',{cache:'no-store'});if(!response.ok)throw Error();const result=await response.json();for(const row of devices.querySelectorAll('[data-name]')){const state=result.rows.find(item=>item.Name===row.dataset.name);if(!state)continue;const badge=row.querySelector('[data-status]');badge.textContent=state.State;badge.className='badge '+(['ok','warn','error'].includes(state.Kind)?state.Kind:'neutral');row.querySelector('[data-reason]').textContent=state.Reason;row.querySelector('[data-pending]').hidden=!state.Pending}note.textContent='Updated '+new Date().toLocaleTimeString()}catch(_){note.textContent='Status unavailable. Showing the previous values.'}finally{busy=false;refresh.disabled=false}}
+  async function update(){if(busy||document.hidden)return;busy=true;refresh.disabled=true;try{const response=await fetch('/setup/status',{cache:'no-store'});if(!response.ok)throw Error();const result=await response.json();if(profileForm&&!applyingProfile){profileForm.elements.revision.value=result.revision;profileSelect.value=result.profile||'';}for(const row of devices.querySelectorAll('[data-name]')){const state=result.rows.find(item=>item.Name===row.dataset.name);if(!state)continue;row.dataset.enabled=String(state.Enabled);const toggle=row.querySelector('[role=switch]');toggle.setAttribute('aria-checked',String(state.Enabled));toggle.value=state.Enabled?'disable':'enable';const badge=row.querySelector('[data-status]');badge.textContent=state.State;badge.className='badge '+(['ok','warn','error'].includes(state.Kind)?state.Kind:'neutral');row.querySelector('[data-reason]').textContent=state.Reason;row.querySelector('[data-pending]').hidden=!state.Pending;for(const button of row.querySelectorAll('button[name=action]'))if(['restart','delete'].includes(button.value))button.disabled=button.value==='restart'?!state.Enabled:state.Enabled;}apply();note.textContent='Updated '+new Date().toLocaleTimeString()}catch(_){note.textContent='Status unavailable. Showing the previous values.'}finally{busy=false;refresh.disabled=false}}
   refresh.addEventListener('click',update);setInterval(update,5000);update();
  }
  const logs=document.getElementById('logs');if(logs){

@@ -11,8 +11,11 @@ normal INDI installation process. indihurd serves `indi_*` binaries without
 requiring changes to the drivers or rebuilding indihurd. Alpaca mappings provide
 an additional interface for supported device types.
 
-The Add device page lists executable `indi_*` files on `PATH`. Named driver
-selection in INDI profiles also uses the installed INDI XML catalogs.
+The Add device page lists executable `indi_*` files on `PATH`. INDI profiles
+apply subsets of the devices configured on the Devices page by saving enable
+flags and reconciling their managed processes. The Ekos API translates configured
+instance names to installed INDI XML catalog labels by executable; browser
+editing and persisted profiles retain the instance names.
 See [README.md](README.md) for configuration and property dumps.
 
 Go changes are needed when an INDI property needs a new mapping or a new
@@ -179,8 +182,8 @@ context of the full configuration; names and explicit Alpaca ports must be uniqu
 including ports reserved by disabled entries. Validation and failed saves must
 preserve the user's draft and the saved configuration.
 
-Native Web Manager profiles have their own persistence and lifecycle, separate
-from configuration-owned Alpaca mappings. Status and running-driver endpoints
+Native Web Manager profiles have their own persistence; applying them updates
+the configured device enable flags for both INDI and Alpaca. Status and running-driver endpoints
 also report configured drivers served through the INDI listener. See the
 [Web Manager documentation](README.md#web-manager-compatibility) for supported
 operations and limitations.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -39,7 +40,19 @@ func (m *management) handleSettings(w http.ResponseWriter, r *http.Request) {
 	if f.IndiListen != "" {
 		p.IndiListen = f.IndiListen
 	}
+	p.CanStopAll = len(m.active) > 0
+	for _, e := range f.Devices {
+		if e.Enabled() {
+			p.CanStopAll = true
+		}
+	}
 	if r.Method != http.MethodPost {
+		p.Notice = r.URL.Query().Get("notice")
+		if r.URL.Query().Get("draft") == "1" {
+			p.Mode = r.URL.Query().Get("mode")
+			p.IndiPort = r.URL.Query().Get("indiPort")
+			p.IndiListen = r.URL.Query().Get("indiListen")
+		}
 		m.render(w, p)
 		return
 	}
@@ -51,6 +64,28 @@ func (m *management) handleSettings(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("configuration changed since this form opened; reopen Configuration before saving")
 	}
 	p.Revision = expected
+	if r.PostForm.Get("action") == "stop-all" {
+		if err == nil {
+			for i := range f.Devices {
+				off := false
+				f.Devices[i].Enable = &off
+			}
+			output, marshalErr := json.MarshalIndent(f, "", "  ")
+			err = marshalErr
+			if err == nil {
+				err = m.save(append(output, '\n'), expected)
+			}
+		}
+		if err != nil {
+			p.Error = err.Error()
+			m.render(w, p)
+			return
+		}
+		// Redirect after saving while preserving the user's pending mode/address edits.
+		query := url.Values{"draft": {"1"}, "mode": {p.Mode}, "indiPort": {p.IndiPort}, "indiListen": {p.IndiListen}, "notice": {"All devices stopped and disabled. You can now check and save the serving mode."}}
+		http.Redirect(w, r, "/setup/config?"+query.Encode(), http.StatusSeeOther)
+		return
+	}
 	enabled := p.Mode != "indi"
 	f.Alpaca = &enabled
 	switch p.Mode {

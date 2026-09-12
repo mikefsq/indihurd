@@ -154,9 +154,8 @@ invalid, no devices are enabled, or a driver fails to start.
   leaving the page closes the process. Abandoned sessions expire after five
   minutes without requests. No connection or driver configuration-save command
   is sent by the editor.
-- **INDI profiles:** create and save named sets of installed INDI drivers, then
-  start or stop them for Ekos. Profiles are separate from Alpaca device entries;
-  see Web Manager compatibility below.
+- **INDI profiles:** select named subsets of configured devices to expose to
+  Ekos through the server INDI listener, by applying their saved device selections.
 - **Configuration:** a form selects INDI only, Alpaca only, or both, with the
   INDI port and listen address. It preserves device entries and checks before
   saving. An advanced JSON editor remains available for recovery.
@@ -424,31 +423,68 @@ per-entry `port` values are optional, and Alpaca discovery is disabled.
 indihurd does not provide remote-server chaining or driver-to-driver snooping.
 Camera FITS headers therefore do not receive mount metadata through snooping.
 
+To change the serving mode or INDI listener, use **Stop all devices** on
+Configuration. It saves every device as disabled and stops their processes,
+while preserving pending edits in the settings form. Check and save the new
+mode, then enable the desired devices again. This interrupts INDI and Alpaca
+hardware access. Profiles and per-device connection settings are preserved.
+
 ## Web Manager compatibility
 
 In Ekos, select a remote INDI server, enter the indihurd host, and enable
 INDI Web Manager on port **8624**. The INDI connection uses **7624** by default;
 HTTP management and INDI device traffic use separate ports.
 
-The **INDI profiles** page manages named driver sets, their INDI port, automatic
-hardware connection, and startup at indihurd launch. Profiles are stored in
-`webmanager.json` beside `indihurd.conf` (normally `/etc/indihurd/webmanager.json`).
-They launch native INDI drivers without requiring an Alpaca mapping and do not
-rewrite the device entries in `indihurd.conf`. Only one profile can run at a time.
-Disable a configured device before starting its executable through a profile;
-close any temporary configuration session for that executable first.
+The **INDI profiles** page selects subsets of configured devices to present to
+Ekos. Labels are the instance names on the Devices page, not the installed
+INDI catalog. Add devices there first; unconfigured binaries and custom catalog
+aliases are not offered. Profiles are stored in `webmanager.json` beside
+`indihurd.conf` (normally `/etc/indihurd/webmanager.json`).
 
-A profile using the configured INDI port shares its listener and listen address.
-For remote clients, set **INDI listen address** in Configuration to `0.0.0.0`
-or the host's network address. A profile on another port opens its own listener
-on all interfaces. Stopping a profile stops its children and any listener it owns;
-configuration-owned drivers and the shared INDI listener remain running.
+The main Devices page has a **Profile** dropdown. Selecting a saved profile
+validates and saves its device enable flags in `indihurd.conf`: selected devices
+are enabled and all others are disabled. Newly enabled devices start; devices
+outside the selection stop. Already enabled devices that remain selected keep
+running. This affects both native INDI and Alpaca availability. Hardware
+connection settings and mappings remain in the individual device entries.
 
-The HTTP JSON API supports profile creation, updates and deletion; profile
-start/stop; installed and running driver lists; and profile driver start, stop
-and restart. Installed driver labels come from XML catalogs in
-`/usr/share/indi` and `/usr/local/share/indi`, filtered for available executables.
-`INDI_DATA_DIR` can select a different catalog directory.
+The dropdown shows **Custom selection** when the enable flags do not match a
+saved profile. Individual enable switches continue to work. Saved enable flags
+survive a daemon restart; a profile marked for autostart is reapplied at startup.
+Clearing the profile label leaves the current enable flags unchanged.
+
+Profiles use the server's configured INDI port and listen address. Changing the
+exposed set disconnects existing INDI clients so they can reconnect with a fresh
+device list. For remote clients, set **INDI listen address** in Configuration to
+`0.0.0.0` or the host's network address.
+
+The Web Manager API supports profile CRUD, application/label clearing through the
+start/stop endpoints, and lists of configured/exposed devices. Per-driver
+start/stop/restart and custom driver creation are rejected: manage devices on
+the Devices page. The compatibility `autoconnect` field is accepted but does
+not override the configured device connection behavior. Autostart selects the
+profile at daemon startup. Profiles saved with old catalog labels or separate
+ports must be edited to use configured instance names and the server INDI port;
+unavailable selections remain visible in the editor until explicitly removed.
+
+The browser and stored profiles use configured instance names. The Ekos API
+(`/api/`) translates those names to INDI catalog labels using the configured
+executable, and translates incoming selections back to instance names. Catalogs
+are read from `/usr/share/indi` and `/usr/local/share/indi` (or `INDI_DATA_DIR`).
+They provide labels only; unconfigured drivers are never added to the list.
+Missing or ambiguous catalog mappings produce an explicit error. Ekos must also
+have the corresponding labels in its own installed catalog.
+
+For example, `ASI6200MM` is exported as `ZWO CCD`, and `QHY CCD POLEMASTER` as
+`QHY CCD`. Where multiple configured instances share a catalog label, an Ekos
+round trip preserves the existing profile selection. A new ambiguous selection
+must first be made in indihurd. The browser uses `/setup/api/` to retain instance
+names throughout editing.
+
+Ekos may still skip profile activation when its required drivers are already
+running. Select the
+profile in indihurd before connecting Ekos; automatic Ekos profile switching
+is not fully compatible with this server-owned configuration model.
 
 Server status reflects an available INDI listener, independently of profiles.
 Running-driver responses include configuration-owned drivers available through
