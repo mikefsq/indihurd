@@ -22,9 +22,10 @@ type Child interface {
 
 // Server multiplexes one or more children to INDI clients on a TCP port.
 type Server struct {
-	addr     string
-	children []Child
-	logf     func(string, ...any)
+	addr       string
+	children   []Child
+	childrenMu sync.RWMutex
+	logf       func(string, ...any)
 
 	mu        sync.Mutex
 	conns     map[*conn]struct{}
@@ -40,6 +41,18 @@ func New(addr string, logf func(string, ...any), children ...Child) *Server {
 	return &Server{addr: addr, children: children, logf: logf, conns: map[*conn]struct{}{}, dupWarned: map[string]bool{}}
 }
 
+// SetChildren updates routing without disconnecting unrelated INDI clients.
+func (s *Server) SetChildren(children []Child) {
+	s.childrenMu.Lock()
+	s.children = append([]Child(nil), children...)
+	s.childrenMu.Unlock()
+}
+func (s *Server) Children() []Child {
+	s.childrenMu.RLock()
+	defer s.childrenMu.RUnlock()
+	return append([]Child(nil), s.children...)
+}
+
 // Serve listens until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context) error {
 	ln, err := net.Listen("tcp", s.addr)
@@ -49,6 +62,11 @@ func (s *Server) Serve(ctx context.Context) error {
 	s.mu.Lock()
 	s.ln = ln
 	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.ln = nil
+		s.mu.Unlock()
+	}()
 	go func() { <-ctx.Done(); ln.Close() }()
 	s.logf("indiserve: listening on %s", ln.Addr())
 
@@ -149,7 +167,7 @@ func (s *Server) publish(el *indiwire.Element, blobs map[string][]byte) {
 
 func (s *Server) devices() []string {
 	seen := map[string]bool{}
-	for _, ch := range s.children {
+	for _, ch := range s.Children() {
 		snap := ch.Snapshot()
 		if !snap.Valid() {
 			continue
@@ -172,7 +190,7 @@ func (s *Server) devices() []string {
 // childFor returns the first child publishing device.
 func (s *Server) childFor(device string) Child {
 	var found Child
-	for _, ch := range s.children {
+	for _, ch := range s.Children() {
 		snap := ch.Snapshot()
 		if !snap.Valid() {
 			continue
@@ -203,7 +221,7 @@ func (s *Server) warnDup(device string) {
 
 // replay sends cached definitions to a client requesting properties.
 func (s *Server) replay(c *conn, device, name string) {
-	for _, ch := range s.children {
+	for _, ch := range s.Children() {
 		snap := ch.Snapshot()
 		if !snap.Valid() {
 			continue

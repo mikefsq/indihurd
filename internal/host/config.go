@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -90,20 +91,50 @@ func Load(path string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseConfig(raw, path)
+}
+
+// ParseConfig validates a draft without writing it or launching hardware.
+func ParseConfig(raw []byte, path string) (*File, error) {
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
+		return nil, fmt.Errorf("%s: configuration must be a JSON object", path)
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	var f File
 	if err := dec.Decode(&f); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		return nil, fmt.Errorf("%s: expected one JSON object", path)
+	}
 	ports := map[int]string{}
+	names := map[string]bool{}
+	if f.IndiPort < 0 || f.IndiPort > 65535 {
+		return nil, fmt.Errorf("indiPort must be between 0 and 65535")
+	}
 	for i := range f.Devices {
 		e := &f.Devices[i]
 		if e.Driver == "" || e.Exec == "" || e.Name == "" {
 			return nil, fmt.Errorf("%s: entry %d: driver, exec and name are required", path, i)
 		}
+		if names[e.Name] {
+			return nil, fmt.Errorf("duplicate device name %q", e.Name)
+		}
+		names[e.Name] = true
+		if e.Port < 0 || e.Port > 65535 {
+			return nil, fmt.Errorf("entry %q: invalid port", e.Name)
+		}
 		if _, ok := builders[e.Driver]; !ok {
 			return nil, fmt.Errorf("%s: entry %q: unknown driver %q", path, e.Name, e.Driver)
+		}
+		// Reserve explicit Alpaca ports even for disabled entries, so a draft
+		// cannot pass validation and then fail only when enabled.
+		if f.AlpacaEnabled() && e.Port > 0 {
+			if prev, taken := ports[e.Port]; taken {
+				return nil, fmt.Errorf("%s: devices %q and %q both use Alpaca port %d; choose a different port, including for disabled devices", path, prev, e.Name, e.Port)
+			}
+			ports[e.Port] = e.Name
 		}
 		if !e.Enabled() {
 			continue
@@ -112,13 +143,17 @@ func Load(path string) (*File, error) {
 			if e.Port <= 0 {
 				return nil, fmt.Errorf("%s: entry %q: port is required", path, e.Name)
 			}
-			if prev, taken := ports[e.Port]; taken {
-				return nil, fmt.Errorf("%s: entries %q and %q both claim port %d. One child per port", path, prev, e.Name, e.Port)
-			}
-			ports[e.Port] = e.Name
 		}
-		if _, err := e.Numbers(); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+		nums, numErr := e.Numbers()
+		if numErr == nil {
+			for _, num := range nums {
+				if num < 0 {
+					numErr = fmt.Errorf("device number must not be negative")
+				}
+			}
+		}
+		if numErr != nil {
+			return nil, fmt.Errorf("%s: %w", path, numErr)
 		}
 		for _, m := range []map[string]string{e.Indi.BeforeConnect, e.Indi.AfterConnect} {
 			for k := range m {

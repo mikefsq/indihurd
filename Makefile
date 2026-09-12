@@ -1,7 +1,20 @@
-.PHONY: build check fmt vet test integration deps-head tidy clean help
+.PHONY: build check fmt vet test integration deps-head tidy clean help install indi-drivers install-indi-drivers
 
 build: ## Build bin/indihurd (default; Linux)
 	go build -o bin/indihurd ./cmd/indihurd
+
+indi-drivers: ## Fetch and build INDI core and bundled drivers locally (no sudo)
+	./build/indi-drivers
+
+install-indi-drivers: ## Install built INDI core drivers into /usr/local (sudo)
+	@test "$$(id -u)" -eq 0 || { echo "Run: sudo make install-indi-drivers" >&2; exit 1; }
+	@test -f "$(if $(INDI_BUILD_DIR),$(INDI_BUILD_DIR),build)/core/cmake_install.cmake" || { echo "Build first: make indi-drivers" >&2; exit 1; }
+	cmake --install "$(if $(INDI_BUILD_DIR),$(INDI_BUILD_DIR),build)/core" --prefix /usr/local
+	python3 deploy/install-indi-aliases.py "$(if $(INDI_BUILD_DIR),$(INDI_BUILD_DIR),build)"
+	ldconfig
+
+install: ## Install built binary, default config, and systemd unit (sudo; preserves config)
+	./deploy/install.sh bin/indihurd
 
 check: fmt vet test ## Check formatting, vet, and run unit tests
 
@@ -11,8 +24,10 @@ fmt: ## Check Go formatting without changing files
 vet: ## Run go vet
 	go vet ./...
 
-test: ## Run the Go test suite
+test: ## Run the Go and driver-build orchestration tests
 	go test ./...
+	python3 build/indi-drivers_test.py
+	python3 build/indi-thirdparty_test.py
 
 integration: ## Run simulator tests (see DRIVERS.md for setup)
 	go test -tags integration ./internal/e2e/...
@@ -37,3 +52,10 @@ help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) \
 		| sort \
 		| awk 'BEGIN{FS=":.*## "}{printf "  %-12s %s\n", $$1, $$2}'
+
+.PHONY: indi-thirdparty install-indi-thirdparty
+indi-thirdparty: ## Build Astroasis Oasis, ZWO ASI, Player One and QHY families locally
+	./build/indi-thirdparty
+
+install-indi-thirdparty: ## Install selected third-party drivers, SDKs and USB rules (sudo)
+	./build/indi-thirdparty --install

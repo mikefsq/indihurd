@@ -22,6 +22,57 @@ type DumpOptions struct {
 
 // Dump spawns a driver, waits for its properties to settle, and prints them.
 func Dump(ctx context.Context, o DumpOptions, out io.Writer, logf func(string, ...any)) error {
+	snap, serving, reason := inspectDriver(ctx, o, logf)
+	if !o.Pre && !serving {
+		fmt.Fprintf(out, "# WARNING: never reached connected state: %s\n", reason)
+		fmt.Fprintln(out, "# (the properties below are the pre-connect set)")
+	}
+
+	devices := snap.Devices()
+	sort.Strings(devices)
+	if len(devices) == 0 {
+		return fmt.Errorf("no properties received from %s (is it an INDI driver?)", o.Exec)
+	}
+	for _, dev := range devices {
+		props := snap.Properties(dev)
+		sort.Strings(props)
+		for _, prop := range props {
+			v, ok := snap.Vector(dev, prop)
+			if !ok {
+				continue
+			}
+			fmt.Fprintf(out, "# %s.%s — %v %v %q state=%v\n", dev, prop, v.Type, v.Perm, v.Label, v.State)
+			for _, m := range v.Members {
+				fmt.Fprintf(out, "%s.%s.%s=%s\n", dev, prop, m.Name, memberString(v.Type.String(), m))
+			}
+		}
+	}
+	return nil
+}
+
+// memberString formats a property value for diagnostic output.
+func memberString(vtype string, m snapshot.MemberVal) string {
+	switch vtype {
+	case "Switch":
+		if m.On {
+			return "On"
+		}
+		return "Off"
+	case "Number":
+		if m.HasRange {
+			return fmt.Sprintf("%g  (min %g max %g step %g)", m.Value, m.Min, m.Max, m.Step)
+		}
+		return fmt.Sprintf("%g", m.Value)
+	case "BLOB":
+		return fmt.Sprintf("<blob %s %d bytes>", m.BlobFormat, m.Size)
+	case "Light":
+		return m.Text
+	}
+	return m.Text
+}
+
+// inspectDriver shares the same property acquisition path with CLI dump and web onboarding.
+func inspectDriver(ctx context.Context, o DumpOptions, logf func(string, ...any)) (*snapshot.Snapshot, bool, string) {
 	if o.Timeout == 0 {
 		o.Timeout = 10 * time.Second
 	}
@@ -59,53 +110,8 @@ func Dump(ctx context.Context, o DumpOptions, out io.Writer, logf func(string, .
 
 render:
 	snap := st.Current()
-	if !o.Pre && !sup.Serving() {
-		fmt.Fprintf(out, "# WARNING: never reached connected state: %s\n", sup.Reason())
-		fmt.Fprintf(out, "# (the properties below are the pre-connect set)\n")
-	}
-	devices := snap.Devices()
-	sort.Strings(devices)
-	if len(devices) == 0 {
-		cancel()
-		<-done
-		return fmt.Errorf("no properties received from %s (is it an INDI driver?)", o.Exec)
-	}
-	for _, dev := range devices {
-		props := snap.Properties(dev)
-		sort.Strings(props)
-		for _, prop := range props {
-			v, ok := snap.Vector(dev, prop)
-			if !ok {
-				continue
-			}
-			fmt.Fprintf(out, "# %s.%s — %v %v %q state=%v\n", dev, prop, v.Type, v.Perm, v.Label, v.State)
-			for _, m := range v.Members {
-				fmt.Fprintf(out, "%s.%s.%s=%s\n", dev, prop, m.Name, memberString(v.Type.String(), m))
-			}
-		}
-	}
+	serving, reason := sup.Serving(), sup.Reason()
 	cancel()
 	<-done
-	return nil
-}
-
-// memberString formats a property value for diagnostic output.
-func memberString(vtype string, m snapshot.MemberVal) string {
-	switch vtype {
-	case "Switch":
-		if m.On {
-			return "On"
-		}
-		return "Off"
-	case "Number":
-		if m.HasRange {
-			return fmt.Sprintf("%g  (min %g max %g step %g)", m.Value, m.Min, m.Max, m.Step)
-		}
-		return fmt.Sprintf("%g", m.Value)
-	case "BLOB":
-		return fmt.Sprintf("<blob %s %d bytes>", m.BlobFormat, m.Size)
-	case "Light":
-		return m.Text
-	}
-	return m.Text
+	return snap, serving, reason
 }

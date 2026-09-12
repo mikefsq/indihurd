@@ -63,6 +63,8 @@ type Config struct {
 
 	// HoldConnect suppresses the CONNECT drive entirely, so Serving is never reached.
 	HoldConnect bool
+	// ClientManaged permits INDI clients to configure and connect a disconnected driver.
+	ClientManaged bool
 
 	// Logf receives phase transitions and driver stderr; nil discards.
 	Logf func(format string, args ...any)

@@ -3,6 +3,7 @@ package supervisor
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -34,7 +35,7 @@ func (s *Supervisor) rawSetNumber(device, prop string, v map[string]float64) err
 }
 
 func (s *Supervisor) gate() error {
-	if !s.Serving() {
+	if !s.cfg.ClientManaged && !s.Serving() {
 		return ErrNotServing{Reason: s.Reason()}
 	}
 	return nil
@@ -166,4 +167,40 @@ func (ws *waiters) failAll(err error) {
 		}
 		delete(ws.m, k)
 	}
+}
+
+// SetPreconnect writes configuration only for a supervisor explicitly held disconnected.
+// The caller must validate the property metadata and values before calling.
+func (s *Supervisor) SetPreconnect(ctx context.Context, device, prop string, kind indiwire.VType, values map[string]string) error {
+	if !s.cfg.HoldConnect || prop == "CONNECTION" {
+		return fmt.Errorf("pre-connect writes require a held configuration session")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	switch kind {
+	case indiwire.Text:
+		return s.rawWrite(func(w *indiwire.Writer) error { return w.SetText(device, prop, values) })
+	case indiwire.Switch:
+		var on, off []string
+		for name, value := range values {
+			if value == "On" {
+				on = append(on, name)
+			} else {
+				off = append(off, name)
+			}
+		}
+		return s.rawSetSwitchOff(device, prop, on, off)
+	case indiwire.Number:
+		numbers := map[string]float64{}
+		for name, value := range values {
+			n, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return err
+			}
+			numbers[name] = n
+		}
+		return s.rawSetNumber(device, prop, numbers)
+	}
+	return fmt.Errorf("unsupported pre-connect property")
 }

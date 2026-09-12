@@ -1,0 +1,22 @@
+[Unit]
+Description=INDI driver manager and Alpaca bridge
+After=network.target
+
+[Service]
+Type=simple
+User=indihurd
+Group=indihurd
+Environment=HOME=/var/lib/indihurd
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/var/lib/indihurd
+ExecStart=/usr/local/bin/indihurd -config /etc/indihurd/indihurd.conf -web :32228
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=control-group
+StateDirectory=indihurd
+StateDirectoryMode=0750
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

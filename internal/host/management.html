@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} — indihurd</title><link rel="stylesheet" href="/setup/style.css"><script src="/setup/app.js" defer></script></head>
+<body>
+<header><h1>{{.Title}}</h1><nav><a href="/setup">Devices</a><a href="/setup/profiles">INDI profiles</a><a href="/setup/logs" target="_blank" rel="noopener">Logs ↗</a><a href="/setup/config">Configuration</a><a href="/setup/add">Add device</a>{{if eq .Page "home"}}<button id="refresh" class="link">Refresh status</button>{{end}}</nav></header>
+{{if .Error}}<p class="notice error" role="alert">{{.Error}}</p>{{end}}{{if .Notice}}<p class="notice ok" role="status">{{.Notice}}</p>{{end}}
+{{if eq .Page "home"}}
+<div class="list-heading"><h2>Devices</h2><label>Show <select id="state-filter"><option value="all">All states</option><option value="enabled">Enabled only</option><option value="disabled">Disabled only</option></select></label></div>
+<div id="devices" class="devices">
+{{range .Rows}}<article class="device" data-name="{{.Name}}" data-enabled="{{.Enabled}}">
+<div class="identity"><a href="/setup/properties?name={{.Name}}">{{.Name}}</a><span class="port">{{.Port}}</span></div>
+<div class="health"><span class="badge {{.Kind}}" data-status>{{.State}}</span><span class="pending" data-pending {{if not .Pending}}hidden{{end}}>Restart required</span><p class="reason" data-reason>{{.Reason}}</p></div>
+<form method="post" action="/setup/action"><input type="hidden" name="name" value="{{.Name}}"><button class="toggle" role="switch" aria-checked="{{.Enabled}}" aria-label="Enable {{.Name}}" name="action" value="{{if .Enabled}}disable{{else}}enable{{end}}"><span aria-hidden="true"></span></button></form>
+<details class="menu"><summary aria-label="Actions for {{.Name}}">⋯</summary><div class="menu-actions"><a class="button" href="/setup/properties?name={{.Name}}">Setup</a><a class="button" href="/setup/edit?name={{.Name}}">Edit</a><form method="post" action="/setup/action"><input type="hidden" name="name" value="{{.Name}}"><button name="action" value="restart" {{if not .Enabled}}disabled{{end}}>Restart</button><button name="action" value="delete" {{if .Enabled}}disabled{{end}}>Delete</button></form></div></details>
+</article>{{else}}<p>No devices configured. <a href="/setup/add">Add a device</a> or <a href="/setup/config">edit the configuration</a>.</p>{{end}}
+</div><p id="status-note" class="muted" role="status"></p><noscript><p>Use the Devices link to refresh status.</p></noscript>
+{{else if eq .Page "profiles"}}
+<script src="/setup/webmanager.js" defer></script>
+<p>Profiles launch native INDI drivers for Ekos. They do not change Alpaca mappings. Disable a configured device before using its driver in a profile.</p>
+<p id="wm-status" role="status">Loading profiles…</p><p id="wm-error" class="notice error" role="alert" hidden></p>
+<label for="wm-profile">Profile</label><select id="wm-profile"><option value="">New profile</option></select>
+<form id="wm-form"><label for="wm-name">Name</label><input id="wm-name" type="text" required maxlength="200" pattern="[^/]+">
+<label for="wm-port">INDI port</label><input id="wm-port" type="number" required min="1" max="65535" value="7624">
+<label><input type="checkbox" id="wm-autoconnect"> Connect hardware automatically</label><label><input type="checkbox" id="wm-autostart"> Start this profile when indihurd starts</label>
+<fieldset class="property"><legend>Installed drivers</legend><label for="wm-filter">Filter drivers</label><input id="wm-filter" type="text"><div id="wm-drivers"></div></fieldset>
+<div class="buttons"><button type="submit">Save profile</button><button type="button" id="wm-start">Start saved profile</button><button type="button" id="wm-stop">Stop profile</button><button type="button" id="wm-delete">Delete profile</button><button type="button" id="wm-refresh">Refresh status</button></div></form>
+<p class="muted">Ekos Web Manager uses HTTP port 8624. INDI clients use the profile’s INDI port. If that port is shared with Configuration, its listen address must allow network clients (0.0.0.0). Profile scripts and remote driver chaining are not supported.</p>
+<noscript><p>Profile management requires JavaScript. Ekos can also manage these profiles directly.</p></noscript>
+{{else if eq .Page "settings"}}
+<p>Choose how indihurd serves its devices. Disable all devices before changing these settings.</p>
+<form id="settings-form" method="post" action="/setup/config">
+<input type="hidden" name="revision" value="{{.Revision}}">
+<label for="serving-mode">Serving mode</label><select id="serving-mode" name="mode"><option value="indi" {{if eq .Mode "indi"}}selected{{end}}>INDI only</option><option value="alpaca" {{if eq .Mode "alpaca"}}selected{{end}}>Alpaca only</option><option value="both" {{if eq .Mode "both"}}selected{{end}}>INDI and Alpaca</option></select>
+<div id="indi-settings"><label for="indi-port">INDI port</label><input id="indi-port" name="indiPort" type="number" min="1" max="65535" step="1" required value="{{.IndiPort}}">
+<label for="indi-listen">INDI listen address</label><input id="indi-listen" name="indiListen" type="text" value="{{.IndiListen}}" placeholder="127.0.0.1" aria-describedby="listen-help"><p id="listen-help" class="muted">127.0.0.1 allows clients on this computer. Use 0.0.0.0 to allow network clients. Blank uses 127.0.0.1.</p></div>
+<p class="muted">Alpaca ports are configured per device. The web management address is set when indihurd starts (default port 32228).</p>
+<p id="settings-validation" role="status"></p><div class="buttons"><button id="settings-check" type="button" {{if .SettingsBlocked}}disabled{{end}}>Check configuration</button><button id="settings-save" {{if .SettingsBlocked}}disabled{{end}}>Save</button><a href="/setup">Cancel</a></div>
+</form><p><a href="/setup/config/raw">Advanced JSON / recovery editor</a></p>
+{{else if or (eq .Page "editor") (eq .Page "add") (eq .Page "config")}}
+{{if ne .Page "add"}}<p>Strict JSON. Check configuration before saving. Changes to a running device take effect after Restart.</p>{{end}}
+{{if eq .Page "add"}}<p>Select an installed INDI executable and the matching Alpaca mapping. New devices are disabled until enabled.</p><label for="device-name">Name</label><input id="device-name" type="text" required form="config-editor"><label>Alpaca Mapping <select id="mapping">{{range .Drivers}}<option>{{.}}</option>{{end}}</select></label><label for="alpaca-port">Alpaca Port</label><input id="alpaca-port" type="number" min="1" max="65535" step="1" required form="config-editor" aria-describedby="alpaca-port-help"><p id="alpaca-port-help" class="muted">HTTP port for this device’s Alpaca interface.</p><label>Installed executable <select id="executable"><option value="">Choose a driver…</option>{{range .Executables}}<option>{{.}}</option>{{end}}</select></label><p class="muted">The executable can be an absolute path or a command on PATH. Reading settings starts a temporary configuration session with connection held off.</p><button id="inspect-driver" type="button">Read pre-connect settings</button><p id="inspect-status" role="status"></p>{{end}}
+<form id="config-editor" method="post" action="{{if eq .Page "config"}}/setup/config{{else if eq .Page "add"}}/setup/add{{else}}/setup/edit{{end}}">
+<input type="hidden" name="name" value="{{.Name}}"><input type="hidden" name="revision" value="{{.Revision}}"><input type="hidden" name="inspection-session" value=""><input type="hidden" name="scope" value="{{if eq .Page "config"}}full{{else if eq .Page "add"}}add{{else}}entry{{end}}">
+{{if eq .Page "add"}}<section id="preconnect-settings" hidden><h2>Connection settings</h2><p class="muted">Changes are sent to the temporary driver so related fields can update. Hardware connection is held off; Save persists these settings.</p><div id="preconnect-fields"></div></section><details id="advanced-config" {{if .Error}}open{{end}}><summary>Advanced JSON</summary>{{end}}<label for="config-text">{{if eq .Page "config"}}{{.Path}}{{else}}Device configuration{{end}}</label><textarea id="config-text" name="text" spellcheck="false" autocapitalize="off" autocomplete="off">{{.Draft}}</textarea>{{if eq .Page "add"}}</details>{{end}}
+<p id="syntax" role="status"></p><p id="validation" role="status"></p><div class="buttons"><button id="check" type="button">Check configuration</button><button id="save" type="submit">Save</button><a href="/setup">Cancel</a></div><noscript><p>Save validates on the server before writing.</p></noscript>
+</form>
+{{else if eq .Page "logs"}}
+<form method="get" action="/setup/logs" class="buttons"><label>Device <select name="name" id="log-filter"><option value="">All devices</option>{{range .Names}}<option {{if eq . $.Name}}selected{{end}}>{{.}}</option>{{end}}</select></label><button>View logs</button></form>
+<p class="muted">Recent messages from this indihurd session (up to 1,000 lines). Restarting indihurd clears this buffer.</p>
+<div class="buttons"><button id="pause">Pause</button><button id="log-refresh">Refresh</button><label><input type="checkbox" id="follow" checked> Follow latest</label></div><p id="log-status" role="status"></p><pre id="logs" data-name="{{.Name}}" tabindex="0" aria-label="Driver logs"></pre>
+{{else if eq .Page "properties"}}
+<nav><a href="/setup/edit?name={{.Name}}">Edit startup configuration</a><a href="/setup/properties?name={{.Name}}">Refresh properties</a><a href="/setup/logs?name={{.Name}}" target="_blank" rel="noopener">Device logs ↗</a></nav>
+<p>Live changes are temporary. Save startup values to apply them before or after hardware connection on the next restart. Read-only and bridge-managed properties cannot be changed here.</p>
+{{range .Properties}}{{$property := .}}<details class="property"><summary>{{.Group}} · {{.Label}} <span class="muted">{{.State}}</span></summary><p class="muted">{{.Device}} · {{.Name}} · {{.Permission}} · Updated {{.Updated}} {{.Message}}</p>
+<form method="post" action="/setup/properties"><input type="hidden" name="name" value="{{$.Name}}"><input type="hidden" name="device" value="{{.Device}}"><input type="hidden" name="property" value="{{.Name}}">
+{{range .Members}}<label>{{.Label}}{{if eq $property.Type "Switch"}}<input type="checkbox" name="member.{{.Name}}" value="On" {{if .On}}checked{{end}} {{if not $property.Writable}}disabled{{end}}>{{else if eq $property.Type "Number"}}<input type="number" name="member.{{.Name}}" value="{{.Value}}" step="{{.Step}}" {{if .Min}}min="{{.Min}}"{{end}} {{if .Max}}max="{{.Max}}"{{end}} {{if not $property.Writable}}readonly{{end}}>{{else}}<input type="text" name="member.{{.Name}}" value="{{.Value}}" {{if not $property.Writable}}readonly{{end}}>{{end}}</label>{{end}}
+{{if .Writable}}<p class="muted">{{if eq .Type "Switch"}}Selection rule: {{.Rule}}.{{end}}</p><div class="buttons"><button name="mode" value="live" {{if not .Live}}disabled{{end}}>Apply temporarily</button><button name="mode" value="before">Save before connect</button><button name="mode" value="after">Save after connect</button></div>{{end}}</form></details>{{end}}
+{{end}}
+<footer>{{.Version}} · {{.Path}}</footer></body></html>

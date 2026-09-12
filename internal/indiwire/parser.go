@@ -25,7 +25,8 @@ type Parser struct {
 	blobSink func(m *BlobMeta) io.Writer
 
 	// Unknown counts skipped unrecognised top-level elements.
-	Unknown int
+	Unknown    int
+	diagnostic func(string)
 }
 
 // BlobMeta describes an in-stream BLOB payload about to be decoded.
@@ -49,6 +50,10 @@ func NewParser(r io.Reader) *Parser {
 // BlobSink routes in-stream BLOB payloads to w instead of Member.Data.
 func (p *Parser) BlobSink(fn func(m *BlobMeta) io.Writer) { p.blobSink = fn }
 
+// Diagnostics accepts plain-text SDK output between top-level XML elements.
+// Parsing inside an XML element remains strict. Nil keeps strict stream parsing.
+func (p *Parser) Diagnostics(fn func(string)) { p.diagnostic = fn }
+
 // Next returns the next element, valid only until the following call to Next;
 // io.EOF marks a clean end of stream.
 func (p *Parser) Next() (*Element, error) {
@@ -65,7 +70,7 @@ func (p *Parser) Next() (*Element, error) {
 
 func (p *Parser) next() (*Element, error) {
 	for {
-		if err := p.skipToTag(); err != nil {
+		if err := p.skipToTag(true); err != nil {
 			return nil, err
 		}
 		// Drivers repeat the XML prolog mid-stream, not just at stream start.
@@ -227,7 +232,7 @@ func (p *Parser) vectorAttrs(e *Element, attrs []attr) {
 
 func (p *Parser) members(e *Element, closeTag, childTag string) error {
 	for {
-		if err := p.skipToTag(); err != nil {
+		if err := p.skipToTag(false); err != nil {
 			return err
 		}
 		if p.peekClose() {
@@ -391,7 +396,7 @@ func (p *Parser) byte() (byte, error) {
 
 func (p *Parser) unread() { p.pos-- }
 
-func (p *Parser) skipToTag() error {
+func (p *Parser) skipToTag(topLevel bool) error {
 	for {
 		b, err := p.byte()
 		if err != nil {
@@ -403,6 +408,12 @@ func (p *Parser) skipToTag() error {
 			return nil
 		case ' ', '\t', '\r', '\n':
 		default:
+			if topLevel && p.diagnostic != nil {
+				if err := p.readDiagnostic(b); err != nil {
+					return err
+				}
+				continue
+			}
 			return fmt.Errorf("indiwire: unexpected %q between elements", b)
 		}
 	}
@@ -723,4 +734,28 @@ func attrVal(attrs []attr, name string) string {
 		}
 	}
 	return ""
+}
+
+// Stop at a line boundary or the next XML tag, without buffering unbounded logs.
+func (p *Parser) readDiagnostic(first byte) error {
+	line := []byte{first}
+	for {
+		b, err := p.byte()
+		if err != nil {
+			p.diagnostic(string(line))
+			return err
+		}
+		if b == '<' || b == '\n' {
+			if b == '<' {
+				p.unread()
+			}
+			p.diagnostic(strings.TrimRight(string(line), "\r"))
+			return nil
+		}
+		line = append(line, b)
+		if len(line) == 4096 {
+			p.diagnostic(string(line))
+			line = line[:0]
+		}
+	}
 }

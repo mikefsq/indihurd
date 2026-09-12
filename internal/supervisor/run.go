@@ -4,6 +4,7 @@ package supervisor
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"syscall"
 	"time"
@@ -75,7 +76,8 @@ func (s *Supervisor) attempt(ctx context.Context) (served bool) {
 		s.mu.Unlock()
 		child.Signal(syscall.SIGTERM)
 		done := make(chan struct{})
-		go func() { child.Wait(); close(done) }()
+		var exitErr error
+		go func() { exitErr = child.Wait(); close(done) }()
 		select {
 		case <-done:
 		case <-time.After(grace):
@@ -85,7 +87,12 @@ func (s *Supervisor) attempt(ctx context.Context) (served bool) {
 		child.Close()
 		gone := s.store.Current().Devices()
 		s.store.Invalidate()
-		s.waiters.failAll(errChildGone)
+		goneErr := error(errChildGone)
+		if exitErr != nil && ctx.Err() == nil {
+			goneErr = fmt.Errorf("supervisor: child exited: %w", exitErr)
+			s.logf("%s: %v", s.cfg.Name, goneErr)
+		}
+		s.waiters.failAll(goneErr)
 		s.announceGone(gone)
 	}()
 
@@ -124,6 +131,7 @@ func (s *Supervisor) attempt(ctx context.Context) (served bool) {
 	}()
 
 	p := indiwire.NewParser(conn)
+	p.Diagnostics(func(line string) { s.logf("%s[stdout]: %s", s.cfg.Name, line) })
 	p.BlobSink(func(*indiwire.BlobMeta) io.Writer {
 		if s.cfg.OnBlob != nil || s.onBlob.Load() != nil {
 			return nil // parser buffers into Member.Data; deliverBlobs consumes it

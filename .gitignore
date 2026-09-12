@@ -1,4 +1,11 @@
 /third-party/
-/build/
+/build/*
+!/build/indi-drivers
+!/build/indi-drivers_test.py
 /bin/
 *.log
+
+/.indi-build/
+
+!/build/indi-thirdparty
+!/build/indi-thirdparty_test.py

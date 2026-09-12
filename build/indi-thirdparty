@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Build selected INDI vendor families; install only their staged manifests."""
+import importlib.machinery
+import importlib.util
+import os
+from pathlib import Path
+import shutil
+import sys
+
+loader = importlib.machinery.SourceFileLoader('indi_build', str(Path(__file__).with_name('indi-drivers')))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+core = importlib.util.module_from_spec(spec)
+loader.exec_module(core)
+FAMILIES = ('astroasis', 'asi', 'playerone', 'qhy')
+PROJECTS = tuple('lib' + name for name in FAMILIES) + tuple('indi-' + name for name in FAMILIES)
+
+
+def install(work, destination=Path('/usr/local')):
+    prefix = work / 'prefix'
+    files = set()
+    for project in PROJECTS:
+        manifest = work / 'selected-thirdparty' / project / 'install_manifest.txt'
+        if not manifest.is_file():
+            raise RuntimeError('Build first: make indi-thirdparty')
+        for line in manifest.read_text().splitlines():
+            source = Path(line)
+            relative = source.relative_to(prefix)  # reject system destinations
+            if '..' in relative.parts or not source.exists():
+                raise RuntimeError(f'Invalid staged file: {source}')
+            files.add(relative)
+    for relative in sorted(files):
+        source, target = prefix / relative, destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name('.' + target.name + '.indihurd-tmp')
+        try:
+            shutil.copy2(source, temporary, follow_symlinks=False)
+            if relative == Path('lib/udev/rules.d/85-qhyccd.rules'):
+                # Upstream embeds the staging firmware directory in its rules.
+                # Rewrite it only in the installed copy.
+                temporary.write_text(temporary.read_text().replace(
+                    str(prefix / 'lib/firmware/qhy'),
+                    str(destination / 'lib/firmware/qhy')))
+            os.replace(temporary, target)
+        finally:
+            if temporary.exists() or temporary.is_symlink():
+                temporary.unlink()
+    print(f'Installed {len(files)} selected third-party files into {destination}')
+
+
+def main():
+    root = Path(__file__).resolve().parent.parent
+    work = Path(os.environ.get('INDI_BUILD_DIR', root / 'build')).resolve()
+    if '--install' in sys.argv:
+        if os.geteuid() != 0:
+            raise RuntimeError('Run: sudo make install-indi-thirdparty')
+        if not os.access('/sbin/fxload', os.X_OK):
+            raise RuntimeError('PoleMaster firmware loading requires fxload. Install it first: sudo apt install fxload')
+        install(work)
+        core.run('ldconfig')
+        core.run('udevadm', 'control', '--reload-rules')
+        return
+    prefix = work / 'prefix'
+    if not (work / 'core/install_manifest.txt').exists():
+        raise RuntimeError('Build INDI core first: make indi-drivers')
+    jobs = int(os.environ.get('INDI_JOBS', '2'))
+    if jobs < 1:
+        raise RuntimeError('INDI_JOBS must be positive')
+    source = work / 'src/indi-3rdparty'
+    commit = core.checkout(source, 'https://github.com/indilib/indi-3rdparty.git',
+                           os.environ.get('INDI_THIRDPARTY_REF', 'master'))
+    (work / 'thirdparty-sources.txt').write_text(f'indi-3rdparty {commit}\n')
+    for project in PROJECTS:
+        target = work / 'selected-thirdparty' / project
+        core.reset_relocated_build(target, source / project)
+        core.run('cmake', '-S', source / project, '-B', target,
+                 '-DFIX_WARNINGS=OFF', '-DCMAKE_BUILD_TYPE=Release',
+                 f'-DCMAKE_INSTALL_PREFIX={prefix}', f'-DCMAKE_PREFIX_PATH={prefix}',
+                 f'-DCMAKE_CXX_FLAGS=-I{core.shlex.quote(str(prefix / "include"))}',
+                 '-DCMAKE_INSTALL_LIBDIR=lib', f'-DINDI_DATA_DIR={prefix / "share/indi"}',
+                 '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib;$ORIGIN',
+                 '-DINDI_INSTALL_UDEV_RULES=ON', '-DINDI_INSTALL_FIRMWARE=ON',
+                 f'-DQHY_FIRMWARE_INSTALL_DIR={prefix / "lib/firmware/qhy"}',
+                 f'-DUDEVRULES_INSTALL_DIR={prefix / "lib/udev/rules.d"}')
+        core.run('cmake', '--build', target, '--parallel', str(jobs))
+        core.run('cmake', '--install', target)
+    print(f'Staged Astroasis, ZWO ASI, Player One, and QHY drivers in {prefix}. No system installation performed.')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError, core.subprocess.CalledProcessError) as error:
+        print(f'INDI third-party build/install failed: {error}', file=sys.stderr)
+        sys.exit(1)

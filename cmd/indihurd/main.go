@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -20,25 +19,26 @@ func main() {
 		runDump(os.Args[2:])
 		return
 	}
-	cfgPath := flag.String("config", "", "config file (default ~/.indi/indihurd.conf)")
+	cfgPath := flag.String("config", "/etc/indihurd/indihurd.conf", "config file")
+	web := flag.String("web", ":32228", "management HTTP address; empty disables the web interface")
+	webManager := flag.String("web-manager", ":8624", "Ekos Web Manager HTTP address; empty disables the additional listener")
 	flag.Parse()
-	if *cfgPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "indihurd: no home directory; use -config <file>")
-			os.Exit(2)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if *web != "" {
+		if err := host.RunManaged(ctx, *cfgPath, *web, log.Printf, *webManager); err != nil && ctx.Err() == nil {
+			log.Fatalf("manage: %v", err)
 		}
-		*cfgPath = filepath.Join(home, ".indi", "indihurd.conf")
+		return
 	}
 	cfg, err := host.Load(*cfgPath)
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	if err := host.Run(ctx, cfg, log.Printf); err != nil && ctx.Err() == nil {
 		log.Fatalf("serve: %v", err)
 	}
+
 }
 
 func runDump(args []string) {

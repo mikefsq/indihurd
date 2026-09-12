@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Build upstream INDI drivers, staging dependencies inside the build workspace."""
+import os
+from pathlib import Path
+import shlex
+import shutil
+import subprocess
+import sys
+
+
+def run(*args, capture=False):
+    print('+ ' + shlex.join(str(arg) for arg in args), flush=True)
+    return subprocess.run([str(arg) for arg in args], check=True, text=True,
+                          stdout=subprocess.PIPE if capture else None).stdout
+
+
+def checkout(path, repository, ref):
+    if not path.exists():
+        run('git', 'clone', '--depth', '1', repository, path)
+    if run('git', '-C', path, 'status', '--porcelain', capture=True).strip():
+        raise RuntimeError(f'{path}: local changes present; refusing to overwrite them')
+    run('git', '-C', path, 'fetch', '--depth', '1', 'origin', ref)
+    run('git', '-C', path, 'checkout', '--detach', 'FETCH_HEAD')
+    run('git', '-C', path, 'submodule', 'update', '--init', '--recursive', '--depth', '1')
+    return run('git', '-C', path, 'rev-parse', 'HEAD', capture=True).strip()
+
+
+def reset_relocated_build(target, source):
+    """Discard generated output only when its CMake cache points elsewhere."""
+    cache = target / 'CMakeCache.txt'
+    if not cache.exists():
+        return
+    paths = {}
+    for line in cache.read_text().splitlines():
+        if line.startswith(('CMAKE_CACHEFILE_DIR:', 'CMAKE_HOME_DIRECTORY:')):
+            key, value = line.split('=', 1)
+            paths[key.split(':', 1)[0]] = Path(value)
+    expected = {'CMAKE_CACHEFILE_DIR': target, 'CMAKE_HOME_DIRECTORY': source}
+    if any(key in paths and paths[key].resolve() != value.resolve()
+           for key, value in expected.items()):
+        if target.is_symlink():
+            raise RuntimeError(f'{target}: refusing to remove a symlinked build directory')
+        print(f'Regenerating relocated CMake build: {target}', flush=True)
+        shutil.rmtree(target)
+
+
+def main():
+    root = Path(__file__).resolve().parent.parent
+    work = Path(os.environ.get('INDI_BUILD_DIR', root / 'build')).resolve()
+    prefix = work / 'prefix'
+    jobs = int(os.environ.get('INDI_JOBS', '2'))
+    if jobs < 1:
+        raise RuntimeError('INDI_JOBS must be positive')
+    work.mkdir(parents=True, exist_ok=True)
+    core = work / 'src/indi'
+    core.parent.mkdir(parents=True, exist_ok=True)
+    commit = checkout(core, 'https://github.com/indilib/indi.git',
+                      os.environ.get('INDI_REF', 'master'))
+    (work / 'sources.txt').write_text(f'indi {commit}\n')
+    common = [f'-DCMAKE_INSTALL_PREFIX={prefix}', f'-DCMAKE_PREFIX_PATH={prefix}',
+              '-DCMAKE_BUILD_TYPE=Release',
+              '-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib;$ORIGIN', '-DINDI_INSTALL_UDEV_RULES=OFF',
+              f'-DCMAKE_INSTALL_SYSCONFDIR={prefix / "etc"}']
+    extra = shlex.split(os.environ.get('INDI_CMAKE_ARGS', ''))
+    target = work / 'core'
+    reset_relocated_build(target, core)
+    run('cmake', '-S', core, '-B', target, '-DFIX_WARNINGS=OFF',
+        '-DINDI_BUILD_UNITTESTS=OFF', *extra, *common)
+    run('cmake', '--build', target, '--parallel', str(jobs))
+    # Stage core output locally; never install to the system.
+    run('cmake', '--install', target, '--prefix', prefix)
+    print(f'Built INDI drivers in {prefix}/bin. No system installation performed. Git commits: {work}/sources.txt')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (subprocess.CalledProcessError, RuntimeError, OSError, ValueError) as error:
+        print(f'INDI build failed: {error}', file=sys.stderr)
+        sys.exit(1)
