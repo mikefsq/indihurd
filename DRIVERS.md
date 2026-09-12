@@ -1,8 +1,19 @@
 # Driver integration
 
-indihurd wraps existing INDI binaries. To use another driver of a supported
-type, install the binary and add a configuration entry; no Go registration or
-rebuild is needed. See [README.md](README.md) for configuration and property dumps.
+indihurd coordinates INDI driver processes within a systemd-hosted service,
+provides browser management, and maintains persistent hardware connection
+configuration. It serves devices to INDI clients and provides Alpaca interfaces
+through device mappings. Systemd manages indihurd; indihurd supervises its driver
+children.
+
+Install INDI drivers in a directory on the indihurd service's `PATH`, using the
+normal INDI installation process. indihurd serves `indi_*` binaries without
+requiring changes to the drivers or rebuilding indihurd. Alpaca mappings provide
+an additional interface for supported device types.
+
+The Add device page lists executable `indi_*` files on `PATH`. Named driver
+selection in INDI profiles also uses the installed INDI XML catalogs.
+See [README.md](README.md) for configuration and property dumps.
 
 Go changes are needed when an INDI property needs a new mapping or a new
 Alpaca device type is added. The focuser implementation is a compact starting
@@ -15,6 +26,9 @@ point: [device.go](internal/devtype/focuser/device.go),
 Use `indihurd dump -exec <driver> -pre` to inspect connection properties, then
 repeat without `-pre` for connected-device properties. Record exact property
 and member names, vector types, permissions, ranges, and state transitions.
+The browser Add device page can also inspect pre-connect properties in a
+temporary session. Use Setup for a configured running process; do not launch
+a second process against hardware already in use.
 
 A driver may publish additional definitions after reporting that it is
 connected. Capabilities must follow the current snapshot, including changes
@@ -124,35 +138,60 @@ changes before committing them.
 
 ### INDI simulator tests
 
-The integration suite needs Linux and built INDI simulators. Clone INDI and
-install its documented build prerequisites:
+The integration suite needs Linux and built INDI simulators. Install the core
+build prerequisites listed in the upstream INDI README, then use the repository
+build target:
 
 ```sh
-mkdir -p third-party
-git clone https://github.com/indilib/indi.git third-party/indi
-cmake -B build/indi -S third-party/indi \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX="$PWD/build/prefix"
-cmake --build build/indi --parallel
+make indi-drivers
+INDIHURD_INDI_BUILD="$PWD/build/core" make integration
 ```
 
-If CMake cannot find Iconv on a glibc system, try configuring with
-`-DIconv_IS_BUILT_IN=TRUE`.
+The build stages core drivers and libraries under `build/prefix` without sudo.
+Tests use the build tree directly, so system installation is unnecessary.
+`INDIHURD_INDI_BUILD` selects another tree; the test helper defaults to
+`build/core`. If `INDI_BUILD_DIR` is customized, point
+`INDIHURD_INDI_BUILD` at its `core` subdirectory.
 
-Some tests use simulators outside the default build set:
+To request the auxiliary simulator targets explicitly:
 
 ```sh
-cmake --build build/indi --target \
+cmake --build build/core --target \
   indi_simulator_rotator indi_simulator_io \
   indi_simulator_lightpanel indi_simulator_dustcover
-make integration
+INDIHURD_INDI_BUILD="$PWD/build/core" make integration
 ```
 
-Tests read executables under `build/indi/drivers/`; installation is unnecessary.
-Set `INDIHURD_INDI_BUILD` to use another build tree. Tests skip unavailable
-simulators, so inspect the skipped tests when assessing coverage.
+Tests skip unavailable simulators, so inspect skipped tests when assessing
+coverage. They require local sockets and subprocess execution.
 
-Vendor drivers may also require an
-[indi-3rdparty](https://github.com/indilib/indi-3rdparty) checkout and its build
+The optional `make indi-thirdparty` target builds the selected vendor families
+listed in [README.md](README.md#build-selected-third-party-indi-drivers), with
+separate installation. Other vendor drivers may require their own build
 prerequisites. Test real hardware for behavior the simulators do not exercise,
 including reconnects and driver-specific properties.
+
+## Management and protocol changes
+
+Browser routes, generated property forms, configuration validation, and Web
+Manager compatibility live in `internal/host`. Validate device drafts in the
+context of the full configuration; names and explicit Alpaca ports must be unique,
+including ports reserved by disabled entries. Validation and failed saves must
+preserve the user's draft and the saved configuration.
+
+Native Web Manager profiles have their own persistence and lifecycle, separate
+from configuration-owned Alpaca mappings. Status and running-driver endpoints
+also report configured drivers served through the INDI listener. See the
+[Web Manager documentation](README.md#web-manager-compatibility) for supported
+operations and limitations.
+
+`internal/indiwire` parses protocol messages; `internal/supervisor` manages child
+processes; `internal/indiserve` serves INDI clients. Child parsers accept and log
+plain-text diagnostics between top-level XML messages. Parsing inside an XML
+message remains strict, and the parser defaults to strict behavior for other
+callers. Protocol regression tests should cover fragmented input and malformed
+messages without requiring hardware.
+
+`make test` also runs the Python build and installation tests. Generated sources,
+SDKs, binaries, and caches under `build/` are ignored by Git; the build scripts
+and their tests in that directory are repository source files.

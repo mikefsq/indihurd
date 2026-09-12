@@ -29,7 +29,7 @@ func startCoverCal(t *testing.T, port int, sim, deviceName, steadyProp string, i
 	build := indiBuild(t)
 	exec := filepath.Join(build, sim)
 	if _, err := os.Stat(exec); err != nil {
-		t.Skipf("%s not built (cmake --build build/indi --target indi_simulator_lightpanel indi_simulator_dustcover): %v", filepath.Base(sim), err)
+		t.Skipf("%s not built (cmake --build build/core --target indi_simulator_lightpanel indi_simulator_dustcover): %v", filepath.Base(sim), err)
 	}
 	indi.DeviceName = deviceName
 	indi.StateDir = t.TempDir()

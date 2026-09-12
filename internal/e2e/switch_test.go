@@ -24,7 +24,7 @@ func startSwitch(t *testing.T, port int) (string, *host.Built) {
 	build := indiBuild(t)
 	exec := filepath.Join(build, ioSim)
 	if _, err := os.Stat(exec); err != nil {
-		t.Skipf("indi_simulator_io not built (cmake --build build/indi --target indi_simulator_io): %v", err)
+		t.Skipf("indi_simulator_io not built (cmake --build build/core --target indi_simulator_io): %v", err)
 	}
 	entry := host.Entry{
 		Driver: "indi-switch",

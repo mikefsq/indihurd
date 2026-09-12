@@ -9,3 +9,6 @@
 
 !/build/indi-thirdparty
 !/build/indi-thirdparty_test.py
+
+!/build/build-deb
+/dist/

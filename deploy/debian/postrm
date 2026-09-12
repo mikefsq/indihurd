@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ "$1" = purge ]; then
+    deb-systemd-helper purge indihurd.service >/dev/null || true
+    deb-systemd-helper unmask indihurd.service >/dev/null || true
+    # Keep hardware configuration and driver state even on purge.
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi

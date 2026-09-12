@@ -20,6 +20,8 @@ fi
 install -d "$stage/usr/local/bin" "$stage/etc/systemd/system"
 install -d -m 0750 "$stage/etc/indihurd" "$stage/var/lib/indihurd"
 install -m 0755 "$binary" "$stage/usr/local/bin/indihurd"
+install -d "$stage/usr/local/share/doc/indihurd"
+install -m 0644 "$source_dir/../LICENSE" "$stage/usr/local/share/doc/indihurd/LICENSE"
 install -m 0644 "$source_dir/indihurd.service" "$stage/etc/systemd/system/indihurd.service"
 if [ ! -e "$stage/etc/indihurd/indihurd.conf" ]; then
     install -m 0640 "$source_dir/indihurd.conf" "$stage/etc/indihurd/indihurd.conf"

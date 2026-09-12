@@ -61,12 +61,13 @@ type Config struct {
 	PresetsBeforeConnect map[string]string
 	PresetsAfterConnect  map[string]string
 
-	// HoldConnect suppresses the CONNECT drive entirely, so Serving is never reached.
+	// HoldConnect suppresses automatic CONNECT requests. A client may still
+	// connect a ClientManaged driver.
 	HoldConnect bool
 	// ClientManaged permits INDI clients to configure and connect a disconnected driver.
 	ClientManaged bool
 
-	// Logf receives phase transitions and driver stderr; nil discards.
+	// Logf receives phase transitions and driver diagnostics; nil discards.
 	Logf func(format string, args ...any)
 
 	// RecordPath, when set, tees the session (transport recording).

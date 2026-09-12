@@ -1,13 +1,21 @@
 # indihurd
 
-indihurd runs INDI astronomy drivers and makes their devices available to
-ASCOM Alpaca clients. It can also serve the same devices to INDI clients such
-as Ekos. Each driver runs in its own process and is restarted if it exits.
+indihurd manages INDI drivers as a systemd-hosted service and serves both the
+native INDI interface and a mapped Alpaca interface for each enabled driver.
+It provides a web interface to configure how drivers attach to hardware, to
+start and stop the drivers, and view their status and logs. It maintains
+persistent hardware connection settings and advertises consistent device
+names to clients.
+
+For INDI clients such as Ekos, indihurd can replace indiserver. It also provides
+ASCOM Alpaca interfaces through its device mappings. Systemd manages indihurd;
+indihurd supervises the individual driver processes and restarts them if they exit.
 
 ## Build and run
 
-Requires Linux, Go 1.25 or later, and the INDI driver binaries for your hardware.
-The driver transport uses Linux file-descriptor passing.
+Requires Linux and Go 1.25 or later to build. Drivers from an ordinary INDI
+installation will work; all binary dependencies of those drivers must be
+installed. Driver executables must be available on the indihurd service’s `PATH`.
 
 ```sh
 git clone https://github.com/mikefsq/indihurd
@@ -20,13 +28,25 @@ Without `-config`, indihurd reads `/etc/indihurd/indihurd.conf`.
 Existing configurations elsewhere can still be used with `-config`.
 Open `http://<host>:32228/setup` for browser management. Use
 `-web 127.0.0.1:32228` to bind locally, another address to change the port,
-or `-web ""` to run without the management interface. The web interface
+or `-web ""` to run without either HTTP listener. An additional Web Manager
+listener defaults to port 8624; `-web-manager ""` disables that extra listener,
+and `-web-manager 127.0.0.1:8624` binds it locally. Both listeners serve the
+same interface and API. The web interface
 has no authentication; its listen address determines where administration
 is accessible.
 `make help` lists build and dependency-update targets. For mapping development
 and simulator tests, see [DRIVERS.md](DRIVERS.md).
 
-## Install as a systemd service
+## Installation
+
+Install indihurd as a systemd service using either a
+[Debian package built with `make deb`](#install-a-debian-package) or a
+[direct source installation](#install-from-source). Both preserve existing
+configuration. Install INDI drivers and their binary dependencies separately.
+An APT repository is planned; repository installation instructions will be
+added when it is available.
+
+### Install from source
 
 ```sh
 make build
@@ -37,7 +57,8 @@ sudo systemctl enable --now indihurd
 Installation puts the binary in `/usr/local/bin/indihurd`, the unit in
 `/etc/systemd/system/indihurd.service`, and an initially empty configuration in
 `/etc/indihurd/indihurd.conf`. Existing configuration is preserved on reinstall.
-The default enables INDI on loopback port 7624 and web management on port 32228;
+The default enables INDI on loopback port 7624, web management on port 32228,
+and the Web Manager listener on port 8624;
 add and enable devices through the browser. Set `indiListen` in Configuration
 if INDI clients need network access.
 
@@ -59,9 +80,51 @@ sudo journalctl -u indihurd -f
 sudo systemctl restart indihurd
 ```
 
-Installation reloads systemd unit definitions but does not start or restart the
-service automatically. `DESTDIR=/tmp/indihurd-package make install` stages files
+`sudo make install` reloads systemd unit definitions but does not start or
+restart the service automatically. `DESTDIR=/tmp/indihurd-package make install` stages files
 without changing accounts or systemd services.
+
+### Install a Debian package
+
+Run `make deb` to build an installable Debian package. It builds static Linux
+packages for **amd64** and
+**arm64** in `dist/`, without sudo. It requires Go, `dpkg-deb`, `dpkg`, and `file`.
+The packages support Debian Trixie. INDI drivers and their binary dependencies
+are installed separately.
+
+```sh
+make deb
+sudo apt install ./dist/indihurd_<version>_<architecture>.deb
+```
+
+Replace `<version>` and `<architecture>` with the package filename printed by
+`make deb`. Use `arm64` for a 64-bit Raspberry Pi or `amd64` for an x86-64 machine;
+`dpkg --print-architecture` reports the local architecture. Package installation
+starts the service; installing an updated package restarts it.
+
+To select an architecture and explicit version, for example:
+
+```sh
+make deb DEB_ARGS='-a arm64 -v 0.1.0'
+sudo apt install ./dist/indihurd_0.1.0_arm64.deb
+```
+
+The build script also supports `armhf` and a custom output directory:
+`build/build-deb -a "amd64 arm64 armhf" -o dist`.
+
+Without `-v`, the version comes from a release tag or a Git snapshot identifier.
+The package installs `/usr/bin/indihurd` and
+`/usr/lib/systemd/system/indihurd.service`. Installation creates the service
+account and seeds configuration only when missing. Upgrades preserve device
+configuration and profiles and restart the service, interrupting its drivers.
+Removal stops the service; configuration and driver state remain even on purge.
+
+When switching from `sudo make install`, its unit at
+`/etc/systemd/system/indihurd.service` takes precedence over the packaged unit.
+Remove that source-installed unit after reviewing any local changes, then run
+`sudo systemctl daemon-reload` and `sudo systemctl restart indihurd` to use the
+packaged executable. An old `/usr/local/bin/indihurd` may also take precedence
+when invoking the command from a shell.
 
 ## Browser management
 
@@ -93,12 +156,17 @@ invalid, no devices are enabled, or a driver fails to start.
   leaving the page closes the process. Abandoned sessions expire after five
   minutes without requests. No connection or driver configuration-save command
   is sent by the editor.
+- **INDI profiles:** create and save named sets of installed INDI drivers, then
+  start or stop them for Ekos. Profiles are separate from Alpaca device entries;
+  see Web Manager compatibility below.
 - **Configuration:** a form selects INDI only, Alpaca only, or both, with the
   INDI port and listen address. It preserves device entries and checks before
   saving. An advanced JSON editor remains available for recovery.
 - **Edit device / Advanced JSON:** syntax feedback updates while typing. Check
   configuration validates the schema and enabled entries' executable availability
-  and mapping configuration before enabling Save. The server repeats validation
+  and mapping configuration before enabling Save. Explicit Alpaca ports must be
+  unique across enabled and disabled entries when Alpaca is enabled. Conflicts
+  identify both devices and the port. The server repeats validation
   before atomically replacing the file. Failed submissions preserve the draft;
   changes made in another editor prevent overwriting its saved version.
 - **Setup:** controls generated from the running driver's INDI property metadata,
@@ -109,11 +177,13 @@ invalid, no devices are enabled, or a driver fails to start.
   uses the existing process rather than launching a second discovery process.
 - **Logs:** a separate tab with a device selector, pause, refresh, and follow.
   It contains the most recent 1,000 log messages from the current indihurd session,
-  including driver stderr; it does not read historical systemd logs.
+  including driver stderr and diagnostic text between XML messages on stdout;
+  it does not read historical systemd logs.
 
 Saved changes to running entries require their Restart action. Enabling and
 disabling take effect immediately and update the configuration file. Disable all
-devices before changing global Alpaca/INDI listener settings. Names must be unique.
+devices before changing global Alpaca/INDI listener settings. Stop an active
+Web Manager profile before saving device configuration. Names must be unique.
 
 Configuration checks do not connect hardware or verify property availability.
 Disabled entries may remain incomplete until enabled. Working means the driver
@@ -159,10 +229,35 @@ Core binaries carry a relative runtime library path so they use the matching
 different system INDI version.
 
 This installs from `build/core` into `/usr/local`, installs the core driver aliases
-(such as `indi_lx200_10micron`), and refreshes the library cache.
+(such as `indi_lx200_10micron`) and the core XML catalog in
+`/usr/local/share/indi`, and refreshes the library cache.
 It does not rebuild, install third-party drivers, or restart services. Reopen Add
 device to refresh the executable list. Hardware access uses existing system udev
 rules because this build disables udev-rule installation.
+
+## Build selected third-party INDI drivers
+
+The optional target builds the Astroasis Oasis focuser and filter wheel, ZWO ASI
+cameras, Player One cameras, and QHY cameras from `indilib/indi-3rdparty`.
+It builds only these
+four vendor families and stages their SDK libraries alongside INDI core.
+Upstream ASI and Player One projects also include their other driver variants.
+
+```sh
+make indi-drivers              # once, if core is not already staged
+make indi-thirdparty          # no sudo; output stays under build/prefix
+sudo make install-indi-drivers # install matching core libraries
+sudo make install-indi-thirdparty
+```
+
+The installation copies only files listed by these selected projects, including
+XML driver catalogs and USB permission rules, into `/usr/local`. It reloads udev
+rules; reconnect USB hardware for new permissions to take effect. It does not
+start drivers or enable devices. Refresh Add device or INDI profiles to see the
+installed drivers. `INDI_JOBS`, `INDI_BUILD_DIR`, and `INDI_THIRDPARTY_REF` can
+control parallelism, workspace, and the third-party Git revision.
+
+The installer reports any missing system prerequisites before copying files.
 
 ## Configure devices
 
@@ -196,7 +291,7 @@ for your hardware. Find property and member names with the `dump` command below.
 | `driver` | Alpaca mapping to use; see supported types below |
 | `exec` | Driver executable path or name on `PATH` |
 | `name` | Alpaca display name |
-| `port` | Unique Alpaca HTTP port for this entry; required unless Alpaca is disabled |
+| `port` | Alpaca HTTP port; required for enabled entries when Alpaca is on. Explicit ports must also be unique across disabled entries |
 | `device` | Explicit Alpaca device number, usually `0` |
 | `enable` | Whether to start the entry; defaults to `true` |
 | `indi.deviceName` | INDI device name; required when the child exposes multiple devices |
@@ -227,6 +322,10 @@ An unmapped or unavailable capability returns the appropriate Alpaca error.
 
 ### Connection settings
 
+Indihurd stores startup presets in its own configuration file, normally
+`/etc/indihurd/indihurd.conf`. The service account can write this file, so the
+web interface can save connection settings without editing driver-owned files.
+
 Use `indi.beforeConnect` for values the driver needs before opening hardware,
 such as its serial port, baud rate, or connection mode. Each key is
 `PROPERTY.MEMBER`, and each value is a string. The driver must define the
@@ -252,19 +351,43 @@ with a warning. Use `-timeout 30s` for a slower driver.
 Dump output uses `DEVICE.PROPERTY.MEMBER`; omit the device prefix when writing
 presets. Set `indi.deviceName` separately if needed.
 
-### State and device identity
+### Driver configuration files
 
-Run indihurd as the same user as your existing INDI setup and leave
-`indi.stateDir` unset. Drivers inherit that user's `HOME` and use the existing
-`~/.indi` directory without moving or copying files.
+Startup presets and driver-saved configuration are separate. Settings saved by
+the web interface as `indi.beforeConnect` or `indi.afterConnect` remain in
+indihurd's configuration. Changes made after startup through an INDI client are
+not automatically copied back into that file. If the driver saves those changes,
+it writes its own configuration files wherever that driver normally stores them.
+A live property change is not necessarily persistent; saving depends on the
+driver and the client's configuration-save operation.
 
-For an isolated driver configuration, `indi.stateDir` overrides the child
-process's `HOME`. For example, `/var/lib/indihurd/mount` puts driver files in
+Many INDI drivers use `$HOME/.indi`, but the exact location is driver-specific.
+With the supplied systemd unit, indihurd runs as the `indihurd` account with
+`HOME=/var/lib/indihurd`. Its child drivers inherit that environment, so drivers
+using `$HOME/.indi` write to `/var/lib/indihurd/.indi`, not the logged-in user's
+home directory. Systemd itself does not supply a universal driver configuration
+location; the service's user and environment determine it.
+
+An `indiserver` launched from a shell as user `pi` typically gives its drivers
+`HOME=/home/pi`, so the same drivers may have existing configuration under
+`/home/pi/.indi`. Switching to the indihurd service does not move or copy those
+files. To reuse them, copy the relevant driver files into the service's expected
+location and ensure the `indihurd` account can read and write them. When run
+manually as the same user as the previous INDI setup, indihurd instead inherits
+that user's `HOME` unless overridden.
+
+For an isolated configuration, `indi.stateDir` overrides the child process's
+`HOME`. For example, `/var/lib/indihurd/mount` makes `$HOME/.indi` resolve to
 `/var/lib/indihurd/mount/.indi`. Set it to the parent of `.indi`, not `.indi`
-itself, and ensure it is writable. The dump command accepts the same optional
-override as `-statedir`.
+itself, and ensure it is writable by the service account. This changes `HOME`;
+it does not relocate files for drivers that use a different storage convention.
+The dump command accepts the same optional override as `-statedir`.
 
-Set `indi.serial` to a stable hardware identifier when available. Otherwise,
+### Device identity
+
+Set `indi.serial` to a stable identifier for Alpaca identity when available.
+This field does not select hardware; selection uses the INDI driver’s connection
+properties. Otherwise,
 the Alpaca identity uses the configured port and device number as a fallback;
 replacing hardware in the same slot retains that identity.
 
@@ -303,6 +426,41 @@ per-entry `port` values are optional, and Alpaca discovery is disabled.
 indihurd does not provide remote-server chaining or driver-to-driver snooping.
 Camera FITS headers therefore do not receive mount metadata through snooping.
 
+## Web Manager compatibility
+
+In Ekos, select a remote INDI server, enter the indihurd host, and enable
+INDI Web Manager on port **8624**. The INDI connection uses **7624** by default;
+HTTP management and INDI device traffic use separate ports.
+
+The **INDI profiles** page manages named driver sets, their INDI port, automatic
+hardware connection, and startup at indihurd launch. Profiles are stored in
+`webmanager.json` beside `indihurd.conf` (normally `/etc/indihurd/webmanager.json`).
+They launch native INDI drivers without requiring an Alpaca mapping and do not
+rewrite the device entries in `indihurd.conf`. Only one profile can run at a time.
+Disable a configured device before starting its executable through a profile;
+close any temporary configuration session for that executable first.
+
+A profile using the configured INDI port shares its listener and listen address.
+For remote clients, set **INDI listen address** in Configuration to `0.0.0.0`
+or the host's network address. A profile on another port opens its own listener
+on all interfaces. Stopping a profile stops its children and any listener it owns;
+configuration-owned drivers and the shared INDI listener remain running.
+
+The HTTP JSON API supports profile creation, updates and deletion; profile
+start/stop; installed and running driver lists; and profile driver start, stop
+and restart. Installed driver labels come from XML catalogs in
+`/usr/share/indi` and `/usr/local/share/indi`, filtered for available executables.
+`INDI_DATA_DIR` can select a different catalog directory.
+
+Server status reflects an available INDI listener, independently of profiles.
+Running-driver responses include configuration-owned drivers available through
+INDI, using executable names that Ekos recognizes. `active_profile` is empty
+when no named profile is active. Server availability does not establish hardware
+readiness; use the device status for that.
+
+Profile scripts and remote-driver chaining are not supported and return explicit
+errors. This is Web Manager API compatibility, not the full StellarMate service.
+
 ## Additional driver properties
 
 Number, switch, and text properties outside the typed mapping can be exposed
@@ -323,36 +481,9 @@ the preset names against `dump -pre` output.
 Set `indi.record` to a file path to capture a driver session for debugging.
 Recordings include property traffic and image payloads and can grow large.
 
-### Selected third-party INDI drivers
+## License
 
-The optional target builds the Astroasis Oasis focuser and filter wheel, ZWO ASI
-cameras, Player One cameras, and QHY cameras (including PoleMaster) from `indilib/indi-3rdparty`. It builds only these
-four vendor families and stages their SDK libraries alongside INDI core.
-Upstream ASI and Player One projects also include their other driver variants.
-
-```sh
-make indi-drivers              # once, if core is not already staged
-make indi-thirdparty          # no sudo; output stays under build/prefix
-sudo make install-indi-drivers # install matching core libraries
-sudo apt install fxload        # firmware loader required by PoleMaster
-sudo make install-indi-thirdparty
-```
-
-The installation copies only files listed by these selected projects, including
-XML driver catalogs and USB permission rules, into `/usr/local`. It reloads udev
-rules; reconnect USB hardware for new permissions to take effect. It does not
-start drivers or enable devices. Refresh Add device or INDI profiles to see the
-installed drivers. `INDI_JOBS`, `INDI_BUILD_DIR`, and `INDI_THIRDPARTY_REF` can
-control parallelism, workspace, and the third-party Git revision.
-
-Unihedron SQM is a core driver (`indi_sqm_weather`), installed by
-`sudo make install-indi-drivers`. Its catalog label is **SQM**. The core install
-also copies `drivers.xml` into `/usr/local/share/indi` for Web Manager discovery.
-StellarMate Power and Stepper are not in the checked-out upstream core or
-third-party source trees; adding their build requires a separate source repository.
-
-QHY PoleMaster uses `indi_qhy_ccd` (catalog label **QHY CCD**). The selected
-installation includes QHY firmware under `/usr/local/lib/firmware/qhy` and rewrites
-its USB rules to that installed path. `fxload` is required separately; the installer
-checks for it before copying files. Reconnect PoleMaster after installation so udev
-can load its firmware. Building or installing does not open the camera.
+indihurd is released under the [GNU General Public License, version 3](LICENSE)
+(SPDX: `GPL-3.0-only`).
+Separately installed INDI drivers, libraries, and vendor SDKs retain their own
+licenses. Building them with the supplied scripts does not change those terms.

@@ -59,3 +59,7 @@ indi-thirdparty: ## Build Astroasis Oasis, ZWO ASI, Player One and QHY families 
 
 install-indi-thirdparty: ## Install selected third-party drivers, SDKs and USB rules (sudo)
 	./build/indi-thirdparty --install
+
+.PHONY: deb
+deb: ## Build static Debian packages for amd64 and arm64 in dist/
+	./build/build-deb $(DEB_ARGS)

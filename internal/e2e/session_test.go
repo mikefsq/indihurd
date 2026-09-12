@@ -30,7 +30,7 @@ func indiBuild(t *testing.T) string {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	dir := filepath.Join(root, "build", "indi")
+	dir := filepath.Join(root, "build", "core")
 	if _, err := os.Stat(filepath.Join(dir, "drivers", "focuser", "indi_simulator_focus")); err != nil {
 		t.Skipf("INDI simulators not built at %s", dir)
 	}

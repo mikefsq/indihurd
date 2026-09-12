@@ -104,29 +104,24 @@ func TestStalledClientDropped(t *testing.T) {
 	_ = stalled // dialed, never read
 	waitConns(t, srv, 2)
 
-	// The healthy client drains at kernel speed so it is never the bottleneck.
+	// Wait for the healthy reader after each publish. Flooding both clients
+	// faster than either goroutine can run tests scheduling, not a stalled peer.
 	posSeen := make(chan struct{})
 	streamEnd := make(chan struct{})
+	drained := make(chan struct{}, 1)
 	go func() {
 		defer close(streamEnd)
-		buf := make([]byte, 1<<20)
-		var tail string
-		seen := false
+		p := indiwire.NewParser(healthy)
 		for {
-			n, err := healthy.Read(buf)
-			if n > 0 && !seen {
-				chunk := tail + string(buf[:n])
-				if strings.Contains(chunk, "name='POS'") {
-					seen = true
-					close(posSeen)
-				}
-				if len(chunk) > 64 {
-					chunk = chunk[len(chunk)-64:]
-				}
-				tail = chunk
-			}
+			el, err := p.Next()
 			if err != nil {
 				return
+			}
+			if el.Name == "POS" {
+				close(posSeen)
+			}
+			if el.Name == "SPAM" {
+				drained <- struct{}{}
 			}
 		}
 	}()
@@ -138,6 +133,13 @@ func TestStalledClientDropped(t *testing.T) {
 	start := time.Now()
 	for i := 0; i < 2000 && srv.connCount() == 2; i++ {
 		srv.Publish(el)
+		select {
+		case <-drained:
+		case <-streamEnd:
+			t.Fatal("healthy client's stream ended")
+		case <-time.After(5 * time.Second):
+			t.Fatal("healthy client did not drain")
+		}
 	}
 	if srv.connCount() != 1 {
 		t.Fatal("stalled client was never dropped")

@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    getent group indihurd >/dev/null || groupadd --system indihurd
+    if ! id indihurd >/dev/null 2>&1; then
+        useradd --system --gid indihurd --home-dir /var/lib/indihurd --no-create-home --shell /usr/sbin/nologin indihurd
+    fi
+    for group in dialout video plugdev; do
+        if getent group "$group" >/dev/null; then
+            usermod -a -G "$group" indihurd
+        fi
+    done
+    install -d -m 0750 -o indihurd -g indihurd /etc/indihurd /var/lib/indihurd
+    if [ ! -e /etc/indihurd/indihurd.conf ]; then
+        install -m 0640 -o indihurd -g indihurd /usr/share/indihurd/indihurd.conf /etc/indihurd/indihurd.conf
+    fi
+    # Browser saves replace files atomically within the owned directory.
+    chown indihurd:indihurd /etc/indihurd/indihurd.conf
+    deb-systemd-helper unmask indihurd.service >/dev/null || true
+    if deb-systemd-helper --quiet was-enabled indihurd.service; then
+        deb-systemd-helper enable indihurd.service >/dev/null || true
+    else
+        deb-systemd-helper update-state indihurd.service >/dev/null || true
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        deb-systemd-invoke restart indihurd.service || true
+    fi
+fi

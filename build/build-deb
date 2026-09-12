@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Build static Debian packages, following alpacahurd's build-deb interface."""
+import argparse
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+ARCHES = {'amd64': ('amd64', ''), 'arm64': ('arm64', ''), 'armhf': ('arm', '7')}
+
+
+def run(*args, **kwargs):
+    return subprocess.run([str(a) for a in args], check=True, **kwargs)
+
+
+def output(*args):
+    return subprocess.check_output([str(a) for a in args], text=True).strip()
+
+
+def version():
+    tag = subprocess.run(['git', '-C', str(ROOT), 'describe', '--exact-match', '--tags', 'HEAD'],
+                         capture_output=True, text=True)
+    if tag.returncode == 0 and re.fullmatch(r'v?\d[\w.+~:-]*', tag.stdout.strip()):
+        return tag.stdout.strip().removeprefix('v')
+    try:
+        stamp = output('git', '-C', ROOT, 'log', '-1', '--format=%cd', '--date=format:%Y%m%d')
+        sha = output('git', '-C', ROOT, 'rev-parse', '--short=7', 'HEAD')
+        return f'0.0.0~git{stamp}.{sha}'
+    except subprocess.CalledProcessError:
+        return '0.0.0'
+
+
+def build(arch, package_version, outdir):
+    with tempfile.TemporaryDirectory(prefix='indihurd-deb-') as tmp:
+        stage = Path(tmp)
+        stage.chmod(0o755)
+        for directory in ('usr/bin', 'usr/lib/systemd/system', 'usr/share/indihurd',
+                          'usr/share/doc/indihurd', 'DEBIAN'):
+            (stage / directory).mkdir(parents=True, exist_ok=True)
+        goarch, goarm = ARCHES[arch]
+        env = dict(os.environ, CGO_ENABLED='0', GOOS='linux', GOARCH=goarch,
+                   GOARM=goarm, GOWORK='off', GOFLAGS='-mod=readonly')
+        binary = stage / 'usr/bin/indihurd'
+        run('go', 'build', '-trimpath', '-ldflags',
+            f'-s -w -X github.com/mikefsq/indihurd/internal/host.Version={package_version}',
+            '-o', binary, './cmd/indihurd', cwd=ROOT, env=env)
+        unit = (ROOT / 'deploy/indihurd.service').read_text().replace(
+            'ExecStart=/usr/local/bin/indihurd', 'ExecStart=/usr/bin/indihurd')
+        (stage / 'usr/lib/systemd/system/indihurd.service').write_text(unit)
+        shutil.copyfile(ROOT / 'deploy/indihurd.conf', stage / 'usr/share/indihurd/indihurd.conf')
+        for doc in ('README.md', 'DRIVERS.md'):
+            shutil.copyfile(ROOT / doc, stage / 'usr/share/doc/indihurd' / doc)
+        write_licenses(stage / 'usr/share/doc/indihurd', env)
+        for script in ('postinst', 'prerm', 'postrm'):
+            path = stage / 'DEBIAN' / script
+            shutil.copyfile(ROOT / 'deploy/debian' / script, path)
+            path.chmod(0o755)
+            run('sh', '-n', path)
+        size = sum(p.stat().st_size for p in stage.rglob('*') if p.is_file()) // 1024 + 1
+        (stage / 'DEBIAN/control').write_text(f'''Package: indihurd
+Version: {package_version}
+Architecture: {arch}
+Installed-Size: {size}
+Maintainer: mikefsq <162642838+mikefsq@users.noreply.github.com>
+Section: science
+Priority: optional
+Homepage: https://github.com/mikefsq/indihurd
+Depends: systemd, init-system-helpers (>= 1.51), passwd
+Description: INDI driver manager with web configuration and Alpaca interfaces
+ Coordinates INDI drivers, maintains hardware connection configuration, and
+ provides browser management and INDI Web Manager compatibility for Ekos.
+ Replaces indiserver for INDI clients and provides ASCOM Alpaca mappings.
+ INDI driver binaries and their dependencies are installed separately.
+''')
+        # Explicit archive modes, independent of the caller's umask.
+        for p in stage.rglob('*'):
+            if p.is_dir():
+                p.chmod(0o755)
+            elif p != binary and p.parent != stage / 'DEBIAN':
+                p.chmod(0o644)
+        binary.chmod(0o755)
+        (stage / 'DEBIAN/control').chmod(0o644)
+        outdir.mkdir(parents=True, exist_ok=True)
+        deb = outdir / f'indihurd_{package_version}_{arch}.deb'
+        run('dpkg-deb', '--root-owner-group', '-Zxz', '--build', stage, deb)
+        verify(deb, arch, package_version)
+        print(f'Built {deb}', flush=True)
+
+
+def write_licenses(doc, env):
+    """Ship notices for the project, Go runtime, and linked Go modules."""
+    shutil.copyfile(ROOT / 'LICENSE', doc / 'LICENSE')
+    notices = ['indihurd\nhttps://github.com/mikefsq/indihurd\n\n' + (ROOT / 'LICENSE').read_text()]
+    goroot = subprocess.check_output(['go', 'env', 'GOROOT'], text=True, env=env).strip()
+    notices.append('Go runtime and standard library\n\n' + (Path(goroot) / 'LICENSE').read_text())
+    modules = subprocess.check_output([
+        'go', 'list', '-deps', '-f', '{{if .Module}}{{.Module.Path}}|{{.Module.Dir}}{{end}}',
+        './cmd/indihurd'], cwd=ROOT, text=True, env=env)
+    for line in sorted(set(modules.splitlines())):
+        if not line or line.startswith('github.com/mikefsq/indihurd|'):
+            continue
+        name, directory = line.split('|', 1)
+        license_file = Path(directory) / 'LICENSE'
+        if not license_file.is_file():
+            raise RuntimeError(f'Missing license notice for linked module {name}')
+        notices.append(name + '\n\n' + license_file.read_text())
+    (doc / 'copyright').write_text('\n\n'.join(notices))
+
+
+def verify(deb, arch, package_version):
+    with tempfile.TemporaryDirectory(prefix='indihurd-deb-check-') as tmp:
+        root = Path(tmp)
+        run('dpkg-deb', '-x', deb, root)
+        run('dpkg-deb', '-e', deb, root / 'control')
+        if output('dpkg-deb', '-f', deb, 'Architecture') != arch:
+            raise RuntimeError('Package architecture mismatch')
+        if output('dpkg-deb', '-f', deb, 'Version') != package_version:
+            raise RuntimeError('Package version mismatch')
+        binary = root / 'usr/bin/indihurd'
+        binary_type = output('file', binary)
+        machine = {'amd64': 'x86-64', 'arm64': 'ARM aarch64', 'armhf': 'ARM, EABI5'}[arch]
+        if machine not in binary_type:
+            raise RuntimeError('Binary architecture mismatch')
+        if 'statically linked' not in binary_type:
+            raise RuntimeError('Package binary must be statically linked')
+        if package_version.encode() not in binary.read_bytes():
+            raise RuntimeError('Binary version stamp missing')
+        for notice in ('LICENSE', 'copyright'):
+            if not (root / 'usr/share/doc/indihurd' / notice).is_file():
+                raise RuntimeError(f'Package license notice missing: {notice}')
+        unit = (root / 'usr/lib/systemd/system/indihurd.service').read_text()
+        if 'ExecStart=/usr/bin/indihurd ' not in unit:
+            raise RuntimeError('Incorrect service executable path')
+        if (root / 'etc/indihurd/indihurd.conf').exists():
+            raise RuntimeError('Package must seed, not overwrite, live configuration')
+        for script in ('postinst', 'prerm', 'postrm'):
+            run('sh', '-n', root / 'control' / script)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-a', default='amd64 arm64', help='space-separated architectures: amd64 arm64 armhf')
+    parser.add_argument('-v', default=None, help='package version; defaults to Git tag or snapshot')
+    parser.add_argument('-o', default=str(ROOT / 'dist'), help='output directory (default: dist/)')
+    args = parser.parse_args()
+    arches = args.a.split()
+    if not arches or any(a not in ARCHES for a in arches):
+        parser.error('supported architectures: amd64, arm64, armhf')
+    for tool in ('go', 'dpkg-deb', 'dpkg', 'file', 'sh'):
+        if not shutil.which(tool):
+            parser.error(f'{tool} not found')
+    package_version = args.v or version()
+    run('dpkg', '--validate-version', package_version)
+    # Keep version stamps and archive names unambiguous.
+    if not re.fullmatch(r'\d[\w.+~:-]*', package_version):
+        parser.error('invalid package version')
+    for arch in arches:
+        build(arch, package_version, Path(args.o).resolve())
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        raise SystemExit(f'build-deb: {error}')

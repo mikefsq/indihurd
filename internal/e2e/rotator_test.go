@@ -27,7 +27,7 @@ func startRotator(t *testing.T, port int) (string, *host.Built) {
 	build := indiBuild(t)
 	exec := filepath.Join(build, rotatorSim)
 	if _, err := os.Stat(exec); err != nil {
-		t.Skipf("indi_simulator_rotator not built (cmake --build build/indi --target indi_simulator_rotator): %v", err)
+		t.Skipf("indi_simulator_rotator not built (cmake --build build/core --target indi_simulator_rotator): %v", err)
 	}
 	entry := host.Entry{
 		Driver: "indi-rotator",
