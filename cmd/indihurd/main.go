@@ -20,13 +20,12 @@ func main() {
 		return
 	}
 	cfgPath := flag.String("config", "/etc/indihurd/indihurd.conf", "config file")
-	web := flag.String("web", ":32228", "management HTTP address; empty disables the web interface")
-	webManager := flag.String("web-manager", ":8624", "Ekos Web Manager HTTP address; empty disables the additional listener")
+	web := flag.String("web", ":8624", "web interface and Ekos Web Manager HTTP address; empty disables HTTP")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if *web != "" {
-		if err := host.RunManaged(ctx, *cfgPath, *web, log.Printf, *webManager); err != nil && ctx.Err() == nil {
+		if err := host.RunManaged(ctx, *cfgPath, *web, log.Printf); err != nil && ctx.Err() == nil {
 			log.Fatalf("manage: %v", err)
 		}
 		return

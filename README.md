@@ -26,12 +26,10 @@ bin/indihurd -config /path/to/indihurd.conf
 
 Without `-config`, indihurd reads `/etc/indihurd/indihurd.conf`.
 Existing configurations elsewhere can still be used with `-config`.
-Open `http://<host>:32228/setup` for browser management. Use
-`-web 127.0.0.1:32228` to bind locally, another address to change the port,
-or `-web ""` to run without either HTTP listener. An additional Web Manager
-listener defaults to port 8624; `-web-manager ""` disables that extra listener,
-and `-web-manager 127.0.0.1:8624` binds it locally. Both listeners serve the
-same interface and API. The web interface
+Open `http://<host>:8624/setup` for browser management. The same HTTP listener
+serves the Ekos Web Manager API. Use `-web 127.0.0.1:8624` to bind locally,
+another address to change the port, or `-web ""` to disable HTTP.
+The web interface
 has no authentication; its listen address determines where administration
 is accessible.
 `make help` lists build and dependency-update targets. For mapping development
@@ -57,8 +55,8 @@ sudo systemctl enable --now indihurd
 Installation puts the binary in `/usr/local/bin/indihurd`, the unit in
 `/etc/systemd/system/indihurd.service`, and an initially empty configuration in
 `/etc/indihurd/indihurd.conf`. Existing configuration is preserved on reinstall.
-The default enables INDI on loopback port 7624, web management on port 32228,
-and the Web Manager listener on port 8624;
+The default enables INDI on loopback port 7624 and the shared web interface
+and Web Manager listener on port 8624;
 add and enable devices through the browser. Set `indiListen` in Configuration
 if INDI clients need network access.
 

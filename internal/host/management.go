@@ -208,7 +208,7 @@ func (m *management) close() {
 }
 
 // RunManaged keeps the management listener alive independently of child health.
-func RunManaged(ctx context.Context, path, addr string, logf func(string, ...any), managerAddr ...string) error {
+func RunManaged(ctx context.Context, path, addr string, logf func(string, ...any)) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ln, err := net.Listen("tcp", addr)
@@ -216,14 +216,6 @@ func RunManaged(ctx context.Context, path, addr string, logf func(string, ...any
 		return fmt.Errorf("management listen: %w", err)
 	}
 	defer ln.Close()
-	var managerListener net.Listener
-	if len(managerAddr) > 0 && managerAddr[0] != "" && managerAddr[0] != addr {
-		managerListener, err = net.Listen("tcp", managerAddr[0])
-		if err != nil {
-			return fmt.Errorf("Web Manager listen: %w", err)
-		}
-		defer managerListener.Close()
-	}
 	m := newManagement(ctx, path, logf)
 	defer m.close()
 	m.startINDI()
@@ -247,15 +239,6 @@ func RunManaged(ctx context.Context, path, addr string, logf func(string, ...any
 		case <-done:
 		}
 	}()
-	if managerListener != nil {
-		go func() {
-			if err := srv.Serve(managerListener); err != nil && err != http.ErrServerClosed {
-				m.log("indihurd", "Web Manager: %v", err)
-				cancel()
-			}
-		}()
-		m.log("indihurd", "Web Manager available at http://%s", managerListener.Addr())
-	}
 	m.log("indihurd", "management available at http://%s/setup", ln.Addr())
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		return err

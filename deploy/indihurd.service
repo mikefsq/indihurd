@@ -9,7 +9,7 @@ Group=indihurd
 Environment=HOME=/var/lib/indihurd
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=/var/lib/indihurd
-ExecStart=/usr/local/bin/indihurd -config /etc/indihurd/indihurd.conf -web :32228
+ExecStart=/usr/local/bin/indihurd -config /etc/indihurd/indihurd.conf -web :8624
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=30

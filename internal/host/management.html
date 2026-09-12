@@ -32,7 +32,7 @@
 <label for="serving-mode">Serving mode</label><select id="serving-mode" name="mode"><option value="indi" {{if eq .Mode "indi"}}selected{{end}}>INDI only</option><option value="alpaca" {{if eq .Mode "alpaca"}}selected{{end}}>Alpaca only</option><option value="both" {{if eq .Mode "both"}}selected{{end}}>INDI and Alpaca</option></select>
 <div id="indi-settings"><label for="indi-port">INDI port</label><input id="indi-port" name="indiPort" type="number" min="1" max="65535" step="1" required value="{{.IndiPort}}">
 <label for="indi-listen">INDI listen address</label><input id="indi-listen" name="indiListen" type="text" value="{{.IndiListen}}" placeholder="127.0.0.1" aria-describedby="listen-help"><p id="listen-help" class="muted">127.0.0.1 allows clients on this computer. Use 0.0.0.0 to allow network clients. Blank uses 127.0.0.1.</p></div>
-<p class="muted">Alpaca ports are configured per device. The web management address is set when indihurd starts (default port 32228).</p>
+<p class="muted">Alpaca ports are configured per device. The web management address is set when indihurd starts (default port 8624).</p>
 <p id="settings-validation" role="status"></p><div class="buttons"><button id="settings-check" type="button" {{if .SettingsBlocked}}disabled{{end}}>Check configuration</button><button id="settings-save" {{if .SettingsBlocked}}disabled{{end}}>Save</button><a href="/setup">Cancel</a></div>
 </form><p><a href="/setup/config/raw">Advanced JSON / recovery editor</a></p>
 {{else if or (eq .Page "editor") (eq .Page "add") (eq .Page "config")}}
