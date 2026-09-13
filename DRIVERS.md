@@ -135,9 +135,11 @@ valid reads and writes, unsupported properties, permission and range errors,
 Busy and Alert states, child loss, and action filtering. Use synthetic snapshots
 and a recording sender to verify the exact commands emitted without hardware.
 
-`make deps-head` updates mikefsq dependencies to their latest `main` commits.
-`make tidy` performs that update and runs `go mod tidy`. Review dependency-file
-changes before committing them.
+`make deps` downloads the release versions recorded in `go.mod`.
+Use `go get github.com/mikefsq/<module>@<release-tag>` for deliberate updates,
+then run `make tidy` and `make check`.
+`make tidy` runs `go mod tidy` without updating dependencies to branch heads.
+Review dependency-file changes before committing them.
 
 ### INDI simulator tests
 

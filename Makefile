@@ -1,6 +1,6 @@
 export GOWORK := off
 
-.PHONY: build check fmt vet test integration deps-head tidy clean help install indi-drivers install-indi-drivers
+.PHONY: build check fmt vet test integration deps tidy clean help install indi-drivers install-indi-drivers
 
 build: ## Build bin/indihurd for the current platform
 	go build -o bin/indihurd ./cmd/indihurd
@@ -34,15 +34,10 @@ test: ## Run the Go and driver-build orchestration tests
 integration: ## Run simulator tests (see DRIVERS.md for setup)
 	go test -tags integration ./internal/e2e/...
 
-deps-head: ## Update mikefsq dependencies to their latest main commits
-	@export GOWORK=off; \
-	self="$$(go list -m)" || exit $$?; \
-	mods="$$(grep -oE 'github.com/mikefsq/[a-zA-Z0-9./-]+' go.mod | sort -u | grep -vxF "$$self")"; \
-	[ -n "$$mods" ] || { echo "deps-head: no github.com/mikefsq dependencies in go.mod"; exit 0; }; \
-	echo "$$mods" | sed 's/^/  /'; \
-	go get $$(echo "$$mods" | sed 's/$$/@main/' | tr '\n' ' ')
+deps: ## Download the dependency versions recorded in go.mod
+	GOWORK=off go mod download
 
-tidy: deps-head ## Update dependencies to main and tidy modules
+tidy: ## Tidy the recorded module dependencies
 	GOWORK=off go mod tidy
 
 clean: ## Remove bin/
