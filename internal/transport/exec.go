@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package transport
 
@@ -29,7 +29,7 @@ func DialExec(ctx context.Context, stderrLine func(string), env []string, argv .
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("transport: empty argv")
 	}
-	pair, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	pair, err := socketPair()
 	if err != nil {
 		return nil, fmt.Errorf("transport: socketpair: %w", err)
 	}
@@ -122,7 +122,7 @@ type socketReader struct {
 
 func (s *socketReader) Read(p []byte) (int, error) {
 	for {
-		n, oobn, _, _, err := syscall.Recvmsg(s.fd, p, s.oob[:], syscall.MSG_CMSG_CLOEXEC)
+		n, oobn, _, _, err := recvMessage(s.fd, p, s.oob[:])
 		if err == syscall.EINTR {
 			continue
 		}
@@ -155,6 +155,9 @@ func (s *socketReader) harvest(oob []byte) error {
 		fds, err := syscall.ParseUnixRights(&m)
 		if err != nil {
 			continue // not SCM_RIGHTS; ignore
+		}
+		for _, fd := range fds {
+			syscall.CloseOnExec(fd)
 		}
 		if len(fds) > maxFdsPerMessage {
 			for _, fd := range fds {

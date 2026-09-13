@@ -13,7 +13,14 @@ indihurd supervises the individual driver processes and restarts them if they ex
 
 ## Build and run
 
-Requires Linux and Go 1.25 or later to build. Drivers from an ordinary INDI
+Requires Go 1.25 or later. `make` builds a native binary on Linux or macOS.
+Driver process supervision, socket transport, and BLOB recording/replay support
+both platforms. The packaged systemd service and installation scripts target Linux.
+On macOS, run `bin/indihurd -config /path/to/indihurd.conf` directly with locally
+installed INDI drivers. Linux cross-builds remain explicit, for example
+`GOOS=linux GOARCH=arm64 CGO_ENABLED=0 make`.
+
+Drivers from an ordinary INDI
 installation will work; all binary dependencies of those drivers must be
 installed. Driver executables must be available on the indihurd service’s `PATH`.
 
@@ -123,6 +130,31 @@ Remove that source-installed unit after reviewing any local changes, then run
 `sudo systemctl daemon-reload` and `sudo systemctl restart indihurd` to use the
 packaged executable. An old `/usr/local/bin/indihurd` may also take precedence
 when invoking the command from a shell.
+
+### CI packages and releases
+
+The **Debian Packages** workflow follows alpacahurd's release process. Pull
+requests run `make check`, build static **amd64** and **arm64** packages, and
+test installation on native Ubuntu runners for both architectures. Installation
+checks cover the service, web interface, embedded version, reinstall behavior,
+and preservation of configuration and driver state on purge. These checks do
+not require INDI hardware or install separate driver packages.
+
+After the workflow is available on GitHub, publish a new version manually:
+
+```sh
+gh workflow run build-deb.yml --repo mikefsq/indihurd --ref main -f version=0.1.0
+```
+
+Choose an unused version without a leading `v`. Add `-f prerelease=true` for
+a prerelease. After all checks pass, the workflow creates the `v<version>` tag
+at the tested commit and a GitHub release containing both `.deb` files. Do not
+pre-create the tag. Existing tags or releases are never overwritten. Pushing
+a tag alone does not run this workflow.
+
+Publishing to an APT archive is a separate step; this workflow only attaches
+packages to the GitHub release. Prereleases are excluded from GitHub's
+`releases/latest` endpoint.
 
 ## Browser management
 

@@ -14,7 +14,7 @@ loader.exec_module(build)
 class InstallTests(unittest.TestCase):
     def test_selected_manifests_and_symlinks(self):
         with tempfile.TemporaryDirectory() as tmp:
-            work = Path(tmp)
+            work = Path(tmp).resolve()
             prefix = work / 'prefix'
             (prefix / 'lib').mkdir(parents=True)
             binary = prefix / 'lib/libvendor.so.1'
@@ -38,7 +38,7 @@ class InstallTests(unittest.TestCase):
 
     def test_qhy_firmware_rule_relocated(self):
         with tempfile.TemporaryDirectory() as tmp:
-            work = Path(tmp)
+            work = Path(tmp).resolve()
             prefix = work / 'prefix'
             rule = prefix / 'lib/udev/rules.d/85-qhyccd.rules'
             firmware = prefix / 'lib/firmware/qhy/POLEMASTER.HEX'
@@ -62,7 +62,7 @@ class InstallTests(unittest.TestCase):
     def test_incomplete_build_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(RuntimeError, 'Build first'):
-                build.install(Path(tmp), Path(tmp) / 'dest')
+                build.install(Path(tmp).resolve(), Path(tmp).resolve() / 'dest')
 
 
 if __name__ == '__main__':

@@ -1,6 +1,8 @@
+export GOWORK := off
+
 .PHONY: build check fmt vet test integration deps-head tidy clean help install indi-drivers install-indi-drivers
 
-build: ## Build bin/indihurd (default; Linux)
+build: ## Build bin/indihurd for the current platform
 	go build -o bin/indihurd ./cmd/indihurd
 
 indi-drivers: ## Fetch and build INDI core and bundled drivers locally (no sudo)

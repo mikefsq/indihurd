@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package supervisor
 
@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -279,7 +280,16 @@ func TestKillSoak(t *testing.T) {
 
 func countFds(t *testing.T) int {
 	t.Helper()
-	ents, err := os.ReadDir("/proc/self/fd")
+	fdDir := "/proc/self/fd"
+	if runtime.GOOS == "darwin" {
+		fdDir = "/dev/fd"
+	}
+	dir, err := os.Open(fdDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	ents, err := dir.Readdirnames(-1)
 	if err != nil {
 		t.Fatal(err)
 	}

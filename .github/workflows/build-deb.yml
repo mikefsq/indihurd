@@ -1,0 +1,186 @@
+name: Debian Packages
+
+# Manual releases create their tag only after build and installation checks pass.
+# gh workflow run build-deb.yml --repo mikefsq/indihurd -f version=1.2.3
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without a leading v, e.g. 1.2.3'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as a prerelease (excluded from releases/latest)'
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+
+concurrency:
+  group: build-deb-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GOWORK: 'off'
+  GOFLAGS: '-mod=readonly'
+
+jobs:
+  build-deb:
+    name: build and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate release version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([~+.-][0-9A-Za-z.+~-]+)?$ ]] || {
+            echo '::error::Use a version such as 1.2.3, without a leading v'
+            exit 1
+          }
+          dpkg --validate-version "$VERSION"
+      - name: Check formatting, vet and tests
+        run: make check
+      - name: Build amd64 and arm64 packages
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          args=(-a 'amd64 arm64')
+          if [[ -n "$VERSION" ]]; then args+=(-v "$VERSION"); fi
+          build/build-deb "${args[@]}"
+      - name: Upload packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: indihurd-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  install-test:
+    name: install test (${{ matrix.arch }})
+    needs: build-deb
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    env:
+      DEB_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: indihurd-deb
+          path: dist
+      - name: Install and verify seeded configuration
+        run: |
+          test "$(dpkg --print-architecture)" = "$DEB_ARCH"
+          sudo apt-get install -y ./dist/indihurd_*_"${DEB_ARCH}".deb
+          systemctl is-enabled indihurd.service
+          systemctl is-active indihurd.service
+          test -x /usr/bin/indihurd
+          test -d /var/lib/indihurd
+          sudo -u indihurd test -w /etc/indihurd
+          sudo -u indihurd test -r /etc/indihurd/indihurd.conf
+          sudo python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config = json.loads(Path('/etc/indihurd/indihurd.conf').read_text())
+          assert config['indiListen'] == '127.0.0.1'
+          assert config['indiPort'] == 7624
+          assert config['devices'] == []
+          PY
+      - name: Verify unit file
+        run: systemd-analyze verify /usr/lib/systemd/system/indihurd.service
+      - name: Check web interface and packaged version
+        run: |
+          curl --retry 20 --retry-connrefused --retry-delay 1 --max-time 5 \
+            -fsS -o /dev/null http://127.0.0.1:8624/setup
+          expected=$(dpkg-query -W -f='${Version}' indihurd)
+          curl -fsS http://127.0.0.1:8624/api/info/version > version.json
+          python3 - "$expected" <<'PY'
+          import json, sys
+          with open('version.json') as stream:
+              result = json.load(stream)
+          assert result['implementation'] == 'indihurd', result
+          assert result['version'] == sys.argv[1], result
+          PY
+      - name: Verify reinstall preserves configuration and driver state
+        run: |
+          sudo python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('/etc/indihurd/indihurd.conf')
+          config = json.loads(path.read_text())
+          config['indiPort'] = 17624
+          path.write_text(json.dumps(config) + '\n')
+          PY
+          sudo -u indihurd sh -c 'printf "preserve me\n" > /var/lib/indihurd/ci-state'
+          sudo cp /etc/indihurd/indihurd.conf /tmp/indihurd-before.conf
+          sudo apt-get install --reinstall -y ./dist/indihurd_*_"${DEB_ARCH}".deb
+          sudo cmp /tmp/indihurd-before.conf /etc/indihurd/indihurd.conf
+          sudo grep -Fx 'preserve me' /var/lib/indihurd/ci-state
+          systemctl is-active indihurd.service
+          curl --retry 20 --retry-connrefused --retry-delay 1 --max-time 5 \
+            -fsS http://127.0.0.1:8624/api/server/config > config.json
+          python3 -c 'import json; assert json.load(open("config.json"))["port"] == 17624'
+      - name: Purge preserves configuration and driver state
+        run: |
+          sudo apt-get purge -y indihurd
+          test ! -e /usr/bin/indihurd
+          test ! -e /usr/lib/systemd/system/indihurd.service
+          ! systemctl is-active --quiet indihurd.service
+          sudo cmp /tmp/indihurd-before.conf /etc/indihurd/indihurd.conf
+          sudo grep -Fx 'preserve me' /var/lib/indihurd/ci-state
+      - name: Service diagnostics on failure
+        if: failure()
+        run: sudo journalctl -u indihurd --no-pager -n 100
+
+  release:
+    name: release
+    needs: [build-deb, install-test]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: indihurd-deb
+          path: dist
+      - name: Create release and attach packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$TAG already exists; choose a new version"
+            exit 1
+          fi
+          # A pre-existing tag could refer to code other than the tested commit.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG already exists; this workflow creates the release tag"
+            exit 1
+          fi
+          args=()
+          if [[ "$PRERELEASE" == true ]]; then args+=(--prerelease); fi
+          gh release create "$TAG" dist/*.deb \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TAG" --generate-notes "${args[@]}"
+          echo "Released $TAG with amd64 and arm64 packages. APT archive publication is a separate step." >> "$GITHUB_STEP_SUMMARY"

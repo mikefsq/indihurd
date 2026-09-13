@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package transport
 
@@ -8,8 +8,6 @@ import (
 	"io"
 	"os"
 	"syscall"
-
-	"golang.org/x/sys/unix"
 )
 
 // Recordings contain typed, length-prefixed read, write, and file-descriptor data.
@@ -177,5 +175,3 @@ func memfdFrom(data []byte) (int, error) {
 	}
 	return fd, nil
 }
-
-func memfdCreate(name string) (int, error) { return unix.MemfdCreate(name, 0) }

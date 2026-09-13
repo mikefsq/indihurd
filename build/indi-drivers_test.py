@@ -17,7 +17,7 @@ loader.exec_module(build)
 class BuildTests(unittest.TestCase):
     def test_core_only_build(self):
         with tempfile.TemporaryDirectory() as directory:
-            work = Path(directory)
+            work = Path(directory).resolve()
             calls = []
             def run(*args, **kwargs):
                 calls.append(tuple(str(a) for a in args))
@@ -39,7 +39,7 @@ class BuildTests(unittest.TestCase):
 
     def test_relocated_cmake_build(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             original = root / 'old'
             source = original / 'src'
             target = original / 'core'
@@ -65,7 +65,7 @@ class BuildTests(unittest.TestCase):
     def test_dirty_checkout_refused(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(build,'run',return_value=' M edited') as run:
             with self.assertRaisesRegex(RuntimeError,'local changes'):
-                build.checkout(Path(directory),'unused','master')
+                build.checkout(Path(directory).resolve(),'unused','master')
             self.assertEqual(run.call_count,1)
 
 

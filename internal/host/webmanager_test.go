@@ -110,7 +110,9 @@ while IFS= read -r line; do :; done
 	m.syncRoutes()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if webListenerRunning(m.indi) && len(m.webRunningDrivers()) == 1 {
+		// A running child may not have sent its first device definition yet.
+		if webListenerRunning(m.indi) && len(m.webRunningDrivers()) == 1 &&
+			len(m.webRunningDrivers()[0].sup.Snapshot().Devices()) > 0 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
