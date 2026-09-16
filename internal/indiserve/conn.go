@@ -33,6 +33,8 @@ func parsePolicy(s string) blobPolicy {
 }
 
 // Queue limits allow a full camera frame while bounding slow-client memory use.
+// queueBytes is a floor: Server raises the effective budget from CCD_INFO so a
+// sensor larger than the floor is still deliverable. See Server.budget.
 var (
 	queueMessages = 256
 	queueBytes    = int64(64 << 20)
@@ -71,9 +73,10 @@ func (c *conn) close() {
 // BLOB) is admitted only into an empty queue.
 func (c *conn) enqueue(msg string) error {
 	n := int64(len(msg))
-	if p := c.pending.Add(n); p > queueBytes && p != n {
+	budget := c.srv.budget()
+	if p := c.pending.Add(n); p > budget && p != n {
 		c.pending.Add(-n)
-		return fmt.Errorf("outbound queue over %d bytes", queueBytes)
+		return fmt.Errorf("outbound queue over %d bytes", budget)
 	}
 	select {
 	case c.out <- msg:

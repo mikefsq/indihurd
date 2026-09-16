@@ -7,6 +7,7 @@ import (
 	"net"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/mikefsq/indihurd/internal/indiwire"
 	"github.com/mikefsq/indihurd/internal/snapshot"
@@ -31,6 +32,51 @@ type Server struct {
 	conns     map[*conn]struct{}
 	ln        net.Listener
 	dupWarned map[string]bool
+
+	// maxFrame is the largest encoded camera frame seen in any CCD_INFO, in
+	// bytes. It sizes the outbound budget so a frame is never undeliverable.
+	maxFrame atomic.Int64
+}
+
+// budget is the per-client outbound byte allowance: the floor, or room for one
+// frame in flight plus property traffic, whichever is larger.
+func (s *Server) budget() int64 {
+	if f := s.maxFrame.Load(); f*2 > queueBytes {
+		return f * 2
+	}
+	return queueBytes
+}
+
+// noteFrameSize raises maxFrame from a CCD_INFO vector. CCD_MAX_* is the
+// unbinned maximum, so binned and subframed images stay under it, and the
+// driver re-sends CCD_INFO when bit depth changes.
+func (s *Server) noteFrameSize(el *indiwire.Element) {
+	if el.Name != "CCD_INFO" {
+		return
+	}
+	var x, y, bits float64
+	for i := range el.Members {
+		switch el.Members[i].Name {
+		case "CCD_MAX_X":
+			x = el.Members[i].Value
+		case "CCD_MAX_Y":
+			y = el.Members[i].Value
+		case "CCD_BITSPERPIXEL":
+			bits = el.Members[i].Value
+		}
+	}
+	if x <= 0 || y <= 0 || bits <= 0 {
+		return
+	}
+	raw := int64(x) * int64(y) * ((int64(bits) + 7) / 8)
+	// base64 expands by 4/3; the XML envelope is negligible beside a frame.
+	encoded := raw / 3 * 4
+	for {
+		cur := s.maxFrame.Load()
+		if encoded <= cur || s.maxFrame.CompareAndSwap(cur, encoded) {
+			return
+		}
+	}
 }
 
 // New builds a server over children, served in the order given.
@@ -173,6 +219,7 @@ func (s *Server) PublishBlob(el *indiwire.Element, data map[string][]byte) {
 }
 
 func (s *Server) publish(el *indiwire.Element, blobs map[string][]byte) {
+	s.noteFrameSize(el)
 	s.mu.Lock()
 	targets := make([]*conn, 0, len(s.conns))
 	for c := range s.conns {
