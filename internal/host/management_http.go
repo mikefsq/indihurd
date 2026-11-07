@@ -29,6 +29,7 @@ var webManagerJS string
 var managementTemplate = template.Must(template.New("management").Parse(managementHTML))
 
 type pageData struct {
+	Home, HomeLabel                                                  string // this host's port-80 landing page (hostHome); "" hides the link
 	Profiles                                                         []webProfile
 	ActiveProfile                                                    string
 	Mode, IndiPort, IndiListen                                       string
@@ -63,6 +64,7 @@ func (m *management) homePage() pageData {
 func (m *management) render(w http.ResponseWriter, p pageData) {
 	p.Path = m.path
 	p.Version = Version
+	p.Home, p.HomeLabel = hostHome()
 	if p.Title == "" {
 		p.Title = "indihurd"
 	}
@@ -115,6 +117,9 @@ func (m *management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
 		p := m.homePage()
 		p.Notice = r.URL.Query().Get("notice")
+		if e := r.URL.Query().Get("error"); e != "" {
+			p.Error = e
+		}
 		m.mu.Unlock()
 		m.render(w, p)
 	case "/setup/status":
@@ -143,12 +148,9 @@ func (m *management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		p := m.homePage()
 		m.mu.Unlock()
 		if err != nil {
-			p.Error = err.Error()
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			m.render(w, p)
+			redirectError(w, r, err)
 			return
 		}
 		http.Redirect(w, r, "/setup?notice="+url.QueryEscape("Profile "+name+" applied. Device enable flags saved."), http.StatusSeeOther)
@@ -159,11 +161,9 @@ func (m *management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		m.mu.Lock()
 		err := m.mutate(r.PostForm.Get("name"), r.PostForm.Get("action"))
-		p := m.homePage()
 		m.mu.Unlock()
 		if err != nil {
-			p.Error = err.Error()
-			m.render(w, p)
+			redirectError(w, r, err)
 			return
 		}
 		http.Redirect(w, r, "/setup", 303)
@@ -381,4 +381,11 @@ func installedINDI() []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// redirectError answers a failed action with 303 to GET /setup carrying the error. Rendering the
+// page as the POST's reply left the action in the browser's history, and a reload offered to send
+// it again.
+func redirectError(w http.ResponseWriter, r *http.Request, err error) {
+	http.Redirect(w, r, "/setup?"+url.Values{"error": {err.Error()}}.Encode(), http.StatusSeeOther)
 }

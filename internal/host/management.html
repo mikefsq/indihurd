@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} — indihurd</title><link rel="stylesheet" href="/setup/style.css"><script src="/setup/app.js" defer></script></head>
 <body>
-<header><h1>{{.Title}}</h1><nav><a href="/setup">Devices</a><a href="/setup/profiles">INDI profiles</a><a href="/setup/logs" target="_blank" rel="noopener">Logs ↗</a><a href="/setup/config">Configuration</a><a href="/setup/add">Add device</a>{{if eq .Page "home"}}<button id="refresh" class="link">Refresh status</button>{{end}}</nav></header>
+<header><h1>{{.Title}}</h1><nav>{{with .Home}}<a href="{{.}}">↑ {{$.HomeLabel}}</a> {{end}}<a href="/setup">Devices</a><a href="/setup/profiles">INDI profiles</a><a href="/setup/logs" target="_blank" rel="noopener">Logs ↗</a><a href="/setup/config">Configuration</a><a href="/setup/add">Add device</a>{{if eq .Page "home"}}<button id="refresh" class="link">Refresh status</button>{{end}}</nav></header>
 {{if .Error}}<p class="notice error" role="alert">{{.Error}}</p>{{end}}{{if .Notice}}<p class="notice ok" role="status">{{.Notice}}</p>{{end}}
 {{if eq .Page "home"}}
 <div class="list-heading"><h2>Devices</h2>
